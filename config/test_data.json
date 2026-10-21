@@ -1,0 +1,13 @@
+{
+  "scenarios": [
+    {
+      "id": "shoes_under_220_ils",
+      "search_query": "shoes",
+      "max_price": 220,
+      "budget_per_item": 220,
+      "currency": "ILS",
+      "limit": 5,
+      "max_pages": 5
+    }
+  ]
+}

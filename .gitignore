@@ -1,0 +1,14 @@
+venv/
+.venv/
+chrome_user_data/
+allure-results/
+reports/
+__pycache__/
+.pytest_cache/
+.idea/
+*.pyc
+.auth/
+test-results/
+allure-report/
+.env
+*.log

@@ -113,15 +113,19 @@ class BasePage:
                                "time - wait 15-30 minutes and run again.")
 
     def _on_browser_check(self) -> bool:
+        """עמוד הבדיקה זעיר ומחזיר טקסט מיד. עמוד שלא החזיר טקסט בזמן הוא עמוד כבד (למשל דף הבית
+        ברשת איטית) - כלומר לא עמוד הבדיקה. בעבר timeout כזה נחשב בטעות "עדיין בבדיקה"."""
         try:
-            return self.BROWSER_CHECK_MARKER in self.page.inner_text("body", timeout=3000).lower()
+            return self.BROWSER_CHECK_MARKER in self.page.inner_text("body", timeout=10000).lower()
+        except PlaywrightTimeout:
+            return False
         except PlaywrightError:
-            return True                 # העמוד באמצע הפניה - עדיין בתוך הבדיקה
+            return True                 # העמוד באמצע הפניה (ההקשר הוחלף) - עדיין בתוך הבדיקה
 
     def is_blocked(self) -> bool:
         try:
-            text = self.page.inner_text("body", timeout=5000).lower()
-        except Exception:
+            text = self.page.inner_text("body", timeout=10000).lower()
+        except PlaywrightError:
             return False
         return any(marker in text for marker in self.BLOCK_MARKERS)
 

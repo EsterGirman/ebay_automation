@@ -1,21 +1,18 @@
-"""Pure logic (no browser): price + currency parsing and result-card filtering. Unit-tested."""
 import re
 from typing import Dict, Iterable, List, NamedTuple, Optional, Tuple
 
-# Currency symbols as eBay shows them -> ISO code. Order matters: "US $" before "$"
 _CURRENCY_CODES = {
-    "US $": "USD", "USD": "USD", "$": "USD",
+    "US $": "USD", "USD": "USD", "$": "USD",  # order matters: "US $" before "$"
     "ILS": "ILS", "NIS": "ILS", "₪": "ILS",
     "EUR": "EUR", "€": "EUR",
     "GBP": "GBP", "£": "GBP",
 }
 _CUR = r"(US\s?\$|USD|\$|ILS|NIS|₪|EUR|€|GBP|£)"
 _NUM = r"(\d[\d,]*(?:\.\d+)?)"
-# "ILS 1,234.50 to ILS 2,000.00" is a range; the currency comes from the first value
 _PRICE_RE = re.compile(_CUR + r"\s?" + _NUM + r"(?:\s*to\s*" + _CUR + r"?\s?" + _NUM + r")?",
                        re.IGNORECASE)
 
-FAKE_ITEM_MARKER = "/itm/123456"   # fake "Shop on eBay" item shown at the top of the results
+FAKE_ITEM_MARKER = "/itm/123456"
 
 
 class Money(NamedTuple):
@@ -28,7 +25,6 @@ def _currency_code(symbol: str) -> str:
 
 
 def parse_money(text: Optional[str]) -> Optional[Money]:
-    """Return amount and currency from the text (for a range - the higher value), or None if there is no price."""
     if not text:
         return None
     m = _PRICE_RE.search(text)
@@ -45,15 +41,12 @@ def parse_price(text: Optional[str]) -> Optional[float]:
 
 
 def parse_cart_summary(text: str) -> Dict[str, Money]:
-    """Parse the cart's 'Order summary': items (items price), shipping, subtotal (incl. shipping).
-    Search after the 'Order summary' heading so 'Shipping' isn't taken from the item cards."""
     start = text.lower().find("order summary")
     text = text[start:] if start >= 0 else text
     summary: Dict[str, Money] = {}
     for key, label in (("items", r"Items\s*\(\d+\)"), ("shipping", r"Shipping"),
                        ("subtotal", r"Subtotal")):
         m = re.search(label, text, re.IGNORECASE)
-        # Value on the same line or the next one, so 'Free' doesn't "borrow" the next line's amount
         value = "\n".join(text[m.end():].split("\n")[:2]) if m else ""
         money = parse_money(value)
         if money:
@@ -62,22 +55,18 @@ def parse_cart_summary(text: str) -> Dict[str, Money]:
 
 
 def parse_cart_item_count(text: str) -> Optional[int]:
-    """Item count from 'Items (n)' in the Order summary."""
     start = text.lower().find("order summary")
     m = re.search(r"Items\s*\((\d+)\)", text[start:] if start >= 0 else text, re.IGNORECASE)
     return int(m.group(1)) if m else None
 
 
 def item_id(url: str) -> Optional[str]:
-    """eBay item ID from a URL (/itm/<id> or /itm/<slug>/<id>)."""
     m = re.search(r"/itm/(?:[^/?#]+/)?(\d{9,})", url or "")
     return m.group(1) if m else None
 
 
 def filter_cards(cards: List[Dict], max_price: float, limit: int, currency: str = "USD",
                  already: Iterable[str] = ()) -> Tuple[List[str], Dict]:
-    """Take cards [{href, price, text}] and return (up to limit URLs within budget, stats).
-    A card in a currency other than `currency` is skipped: 100 ILS can't be compared with 100 USD."""
     seen = set(already)
     urls: List[str] = []
     stats = {"cards": len(cards), "no_link": 0, "no_price": 0, "other_currency": 0,

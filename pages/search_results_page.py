@@ -11,7 +11,6 @@ from .base_page import BasePage, SiteBlockedError
 
 
 class SearchResultsPage(BasePage):
-    """Search results page: search, price filter, product cards via XPath, and paging."""
     SEARCH_URL = "https://www.ebay.com/sch/i.html?_nkw={query}&LH_BIN=1&_ipg=60"
 
     ITEM_CONTAINER = "//li[.//a[contains(@href, '/itm/')]]"
@@ -19,12 +18,10 @@ class SearchResultsPage(BasePage):
     ITEM_LINK = ".//a[contains(@href, '/itm/')]"
     NEXT_PAGE = ("//a[@type='next'] | //a[@aria-label='Go to next search page'] | "
                  "//a[contains(@class, 'pagination__next')]")
-    # Text field only: the price-graph slider has the same aria-label and is hidden
-    MAX_PRICE_INPUT = ("//div[contains(@class, 'textrange')]"
+    MAX_PRICE_INPUT = ("//div[contains(@class, 'textrange')]"  # hidden slider has the same label
                        "//input[@type='text' and starts-with(@placeholder, 'Max')]")
     PRICE_SUBMIT = "//button[@title='Submit price range' or @aria-label='Submit price range']"
 
-    # Reads all result cards in one call (XPath relative to each card)
     JS_EXTRACT = """(els, xp) => els.map(li => {
         const first = (path) => document.evaluate(path, li, null,
             XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
@@ -39,21 +36,17 @@ class SearchResultsPage(BasePage):
 
     @allure.step("חיפוש: {query} עד מחיר {max_price}")
     def search(self, query: str, max_price: float) -> None:
-        """Search Buy It Now only (auctions can't be added to the cart), then apply the site's price filter."""
         url = self.SEARCH_URL.format(query=quote_plus(query))
         self.navigate(url)
         if not self._apply_price_filter_ui(max_price):
-            # Fallback: the same eBay filter via a URL parameter, if the sidebar didn't respond
             self.logger.warning("Price filter UI not available - applying it via URL (_udhi)")
-            self.navigate(f"{url}&_udhi={self._format_price(max_price)}")
+            self.navigate(f"{url}&_udhi={self._format_price(max_price)}")  # fallback: same filter via URL
 
     @staticmethod
     def _format_price(price: float) -> str:
         return str(int(price)) if float(price).is_integer() else str(price)
 
     def _apply_price_filter_ui(self, max_price: float, attempts: int = 2) -> bool:
-        """On the first filter submit eBay sometimes shows the location popup; confirming it reloads the
-        page and the filter is lost. eBay asks once, so after confirming the location we apply it again."""
         for attempt in range(1, attempts + 1):
             if not self.is_visible_within(self.MAX_PRICE_INPUT, timeout=15000):
                 return False
@@ -70,8 +63,6 @@ class SearchResultsPage(BasePage):
         return False
 
     def _type_max_price(self, max_price: float) -> bool:
-        """eBay's component loads lazily: the first typing only "wakes" it and isn't registered, and
-        fill isn't registered at all. So type key by key and retry until the submit arrow is enabled."""
         max_input = self.page.locator(self.MAX_PRICE_INPUT).first
         submit = self.page.locator(self.PRICE_SUBMIT).first
         max_input.scroll_into_view_if_needed()
@@ -79,13 +70,12 @@ class SearchResultsPage(BasePage):
             max_input.click()
             max_input.press("Control+A")
             max_input.press("Backspace")
-            max_input.press_sequentially(self._format_price(max_price), delay=100)
+            max_input.press_sequentially(self._format_price(max_price), delay=100)  # component ignores fill()
             if self._wait_until_enabled(submit, timeout_ms=3000):
                 return True
         return False
 
     def _wait_for_filter_applied(self, timeout_ms: int) -> bool:
-        """True when the URL contains the filter. False if the location popup appeared instead (confirmed here)."""
         for _ in range(timeout_ms // 500):
             if re.search(r"[?&]_udhi=", self.page.url):
                 self.page.wait_for_load_state("domcontentloaded")
@@ -104,7 +94,6 @@ class SearchResultsPage(BasePage):
             return False
 
     def _extract(self) -> List[Dict]:
-        """Read link, price and text from every product card in one browser call instead of one per card."""
         args = {"link": self.ITEM_LINK, "price": self.ITEM_PRICE}
         return self.page.locator(self.ITEM_CONTAINER).evaluate_all(self.JS_EXTRACT, args)
 
@@ -113,10 +102,9 @@ class SearchResultsPage(BasePage):
         return sum(1 for c in cards if c.get("href") and FAKE_ITEM_MARKER not in c["href"])
 
     def _read_cards(self, min_cards: int = 5, max_reloads: int = 2) -> List[Dict]:
-        """Read the cards. If the page loaded partially (few real cards) - wait, then reload."""
         cards: List[Dict] = []
         for attempt in range(max_reloads + 1):
-            if self.is_blocked():                         # a block is not a "slow page" - reloading won't help
+            if self.is_blocked():
                 self.take_screenshot("blocked_on_results")
                 raise SiteBlockedError(
                     "eBay shows a block/error page instead of results. "
@@ -125,7 +113,7 @@ class SearchResultsPage(BasePage):
                 self.page.wait_for_selector(self.ITEM_CONTAINER, state="attached", timeout=15000)
             except PlaywrightTimeout:
                 pass
-            for _ in range(10):                           # up to ~20s for the list to load (lazy-load)
+            for _ in range(10):
                 self.page.mouse.wheel(0, 2500)
                 self.page.wait_for_timeout(300)
                 self.page.mouse.wheel(0, -20000)
@@ -146,12 +134,9 @@ class SearchResultsPage(BasePage):
     @allure.step("איסוף פריטים עד מחיר {max_price} (עד {limit})")
     def get_items_under_price(self, max_price: float, limit: int, currency: str,
                               already: List[str] = ()) -> List[str]:
-        """Return up to limit URLs from the current page with price <= max_price (in currency), skipping
-        ones from earlier pages (already). Per-page stats go to last_stats for the report."""
         cards = self._read_cards()
         urls, stats = filter_cards(cards, max_price, limit, currency, already)
         stats["page_url"] = self.page.url
-        # Sample of the first 3 cards - shows in the report why filtering failed
         stats["sample"] = [(c.get("price") or c.get("text") or "")[:80].replace("\n", " | ")
                            for c in cards[:3]]
         self.last_stats = stats
@@ -172,7 +157,6 @@ class SearchResultsPage(BasePage):
 
     @allure.step("מעבר לעמוד הבא")
     def go_to_next_page(self) -> bool:
-        """Click 'Next' and wait for the URL to change. False if there is no next page or paging is blocked."""
         next_btn = self.page.locator(self.NEXT_PAGE)
         if next_btn.count() == 0:
             return False
@@ -181,7 +165,6 @@ class SearchResultsPage(BasePage):
                 return False
             previous_url = self.page.url
             next_btn.first.click()
-            # Without waiting for the URL to change, the old DOM is still 'loaded' and the previous page is read again
             self.page.wait_for_url(lambda url: url != previous_url, timeout=30000,
                                    wait_until="domcontentloaded")
             if self.is_blocked():

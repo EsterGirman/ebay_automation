@@ -8,15 +8,13 @@ from .login_page import LoginPage
 
 
 class ItemNotAddedError(Exception):
-    """The item was not added (not purchasable / selection required / button disabled)."""
+    pass
 
 
 class ItemDetailsPage(BasePage):
-    """Item page: random variant selection (size/color), click 'Add to cart' and verify it was added."""
     BAD_OPTION_WORDS = ("select", "out of stock", "sold out", "unavailable")
 
-    # Skip dropdowns inside popups (e.g. the shipping-country select in the location dialog)
-    VARIANT_SELECT = "//select[not(@disabled)][not(ancestor::*[@role='dialog'])]"
+    VARIANT_SELECT = "//select[not(@disabled)][not(ancestor::*[@role='dialog'])]"  # skip popup selects
     VARIANT_LISTBOX_BUTTON = ("//*[@data-testid='x-msku-evo']//button[@aria-haspopup='listbox'] | "
                               "//div[contains(@class, 'x-msku')]//button[@aria-haspopup='listbox']")
     LISTBOX_OPTION = "//*[@role='option' and not(@aria-disabled='true')]"
@@ -38,8 +36,6 @@ class ItemDetailsPage(BasePage):
         return bool(t) and not any(w in t for w in self.BAD_OPTION_WORDS)
 
     def _select_random_variants(self) -> None:
-        """Pick a random available value in every selector (size/color). Quantity stays 1 to keep the budget."""
-        # 1. Native <select> dropdowns
         for dropdown in self.page.locator(self.VARIANT_SELECT).all():
             try:
                 valid = [opt.get_attribute("value") for opt in dropdown.locator("option").all()
@@ -53,25 +49,20 @@ class ItemDetailsPage(BasePage):
             except Exception as e:
                 self.logger.info(f"Select variant skipped: {e}")
 
-        # 2. eBay's custom dropdowns (button + role=option)
         for button in self.page.locator(self.VARIANT_LISTBOX_BUTTON).all():
-            for _ in range(2):                       # retry if the choice didn't register
+            for _ in range(2):
                 if self._pick_from_listbox(button):
                     break
 
     def _pick_from_listbox(self, button: Locator) -> bool:
-        """Open a listbox and pick a random option from the visible options of this listbox only.
-        Collecting options page-wide also picked hidden options of the other listbox (color/size);
-        clicking one timed out and the choice stayed "Select"."""
         try:
             button.scroll_into_view_if_needed()
             button.click()
             listbox_id = button.get_attribute("aria-controls")
             if listbox_id:
                 listbox = self.page.locator(f"//*[@id='{listbox_id}']")
-                # The listbox opens with an animation; checking visibility right after the click found 0 options
-                listbox.wait_for(state="visible", timeout=5000)
-                candidates = listbox.locator("xpath=." + self.LISTBOX_OPTION)   # a relative XPath needs the xpath= prefix
+                listbox.wait_for(state="visible", timeout=5000)  # opens with an animation
+                candidates = listbox.locator("xpath=." + self.LISTBOX_OPTION)
             else:
                 self.page.wait_for_timeout(1000)
                 candidates = self.page.locator(self.LISTBOX_OPTION)
@@ -81,7 +72,6 @@ class ItemDetailsPage(BasePage):
                 self.page.keyboard.press("Escape")
                 return False
             random.choice(options).click(timeout=5000)
-            # Wait until the button shows the chosen value instead of "Select"
             selected = button.locator("xpath=.//span[contains(@class, 'btn__text')]")
             for _ in range(10):
                 text = (selected.first.inner_text(timeout=2000) if selected.count()
@@ -90,7 +80,7 @@ class ItemDetailsPage(BasePage):
                     break
                 self.page.wait_for_timeout(300)
             else:
-                return False                         # still "Select" - the choice didn't register
+                return False
             self.logger.info("Selected variant (listbox): " + " ".join(button.inner_text().split()))
             return True
         except Exception as e:
@@ -121,10 +111,8 @@ class ItemDetailsPage(BasePage):
             return
         except PlaywrightTimeout:
             pass
-        # eBay sometimes asks for the password again on 'Add to cart', then redirects to the cart
         LoginPage(self.page).complete_sign_in_if_prompted()
         if self.is_account_upgrade_page() or self.page.locator(self.ACCOUNT_INFO_FORM).first.is_visible():
-            # An account problem, not an item problem: every item gets the same form, so stop trying
             self.take_screenshot("account_info_required")
             raise AccountInfoRequiredError(AccountInfoRequiredError.MESSAGE)
         if not self.is_cart_page():
@@ -132,7 +120,6 @@ class ItemDetailsPage(BasePage):
 
     @allure.step("הוספת {label} לסל: {url}")
     def add_to_cart(self, url: str, label: str) -> bool:
-        """Return True if added. A single item failure is logged and doesn't fail the scenario; a sign-in failure does."""
         step = "navigate"
         try:
             self.navigate(url, retries=0, timeout=45000)
@@ -150,7 +137,7 @@ class ItemDetailsPage(BasePage):
             self.take_screenshot(f"{label}_added_to_cart")
             return True
         except SignInRequiredError:
-            raise                                    # no point trying more items without sign-in
+            raise
         except Exception as e:
             first_line = str(e).strip().splitlines()[0] if str(e).strip() else ""
             self.logger.error(f"{label} failed at step '{step}': "

@@ -9,13 +9,11 @@ from .login_page import LoginPage
 
 
 class CartPage(BasePage):
-    """Shopping cart: open, clear, read the totals (items / shipping / subtotal) and check the budget."""
     CART_URL = "https://cart.ebay.com/"
 
     ORDER_SUMMARY = "//*[normalize-space()='Order summary']"
     REMOVE_BUTTON = ("//button[@data-test-id='cart-remove-item'] | "
                      "//button[normalize-space()='Remove']")
-    # Links of the cart's own line items (not 'recommended items' further down the page)
     CART_ITEM_LINK = ("//a[@data-test-id='cart-item-link'] | "
                       "//*[@data-test-id='list-summary']//a[contains(@href, '/itm/')]")
     ANY_ITEM_LINK = "//a[contains(@href, '/itm/')]"
@@ -23,7 +21,6 @@ class CartPage(BasePage):
 
     @allure.step("פתיחת סל הקניות")
     def open(self, refresh: bool = True) -> None:
-        """refresh=False: if already on the cart page (e.g. after checking items), don't reload."""
         if not refresh and self.is_cart_page():
             return
         self.navigate(self.CART_URL, wait_until="commit", timeout=45000)
@@ -32,7 +29,7 @@ class CartPage(BasePage):
         except PlaywrightTimeout:
             self.logger.warning("Cart page is slow to load, continuing")
         LoginPage(self.page).complete_sign_in_if_prompted()
-        if not self.is_cart_page():                 # after sign-in eBay doesn't always return to the cart
+        if not self.is_cart_page():
             self.navigate(self.CART_URL)
         if self.is_account_upgrade_page():
             self.take_screenshot("account_info_required")
@@ -40,9 +37,8 @@ class CartPage(BasePage):
 
     @allure.step("ריקון הסל לפני התרחיש")
     def clear(self, max_items: int = 30) -> int:
-        """Leftovers from earlier runs inflate the total and break the check - start from an empty cart."""
         self.open()
-        self._wait_until_loaded()
+        self._wait_until_loaded()  # items render after load
         removed = 0
         buttons = self.page.locator(self.REMOVE_BUTTON)
         while removed < max_items and self.is_visible_within(self.REMOVE_BUTTON, timeout=15000):
@@ -61,8 +57,6 @@ class CartPage(BasePage):
         return removed
 
     def _wait_until_loaded(self) -> None:
-        """Cart items render after the page loads. Without this wait a full cart looks empty on a slow
-        network (no Remove button found) and clearing skips every item."""
         try:
             self.wait_for_element_visible(f"{self.ORDER_SUMMARY} | {self.EMPTY_CART_MESSAGE}")
         except PlaywrightTimeout:
@@ -79,7 +73,6 @@ class CartPage(BasePage):
         return summary
 
     def get_item_ids(self) -> Set[str]:
-        """Item IDs (the number in /itm/<id>) from all links on the cart page."""
         links = self.page.locator(self.CART_ITEM_LINK)
         if not links.count():
             self.logger.warning("Cart item links not found by test id - falling back to all item links")
@@ -89,10 +82,8 @@ class CartPage(BasePage):
 
     @allure.step("אימות שכל הפריטים שנוספו נמצאים בסל")
     def assert_contains_items(self, urls: List[str]) -> None:
-        """The 'Added to cart' confirmation on the item page is not enough: check the cart itself (item
-        count and IDs) to catch an add that wasn't kept (session changed, item removed, duplicate add)."""
         self.open()
-        self._read_summary()                         # waits for the cart to load
+        self._read_summary()
         expected = {item_id(u) for u in urls}
         in_cart = self.get_item_ids()
         count = parse_cart_item_count(self.page.inner_text("body"))
@@ -107,7 +98,6 @@ class CartPage(BasePage):
 
     @allure.step("שליפת סכומי הסל")
     def get_summary(self) -> Dict[str, Money]:
-        """Open the cart (if needed), read the order summary and save a screenshot of the cart page."""
         self.open(refresh=False)
         summary = self._read_summary()
         self.take_screenshot("cart_page")
@@ -118,11 +108,9 @@ class CartPage(BasePage):
     @allure.step("אימות שמחיר הפריטים בסל ≤ {budget_per_item} × {items_count}")
     def assert_total_not_exceeds(self, budget_per_item: float, items_count: int,
                                  currency: str = "USD") -> None:
-        """Compare the items total, not Subtotal (which includes shipping): the search filters by item
-        price, so a check that includes shipping could fail even when every item meets the limit."""
         threshold = budget_per_item * items_count
         summary = self.get_summary()
-        items_total = summary.get("items") or summary["subtotal"]
+        items_total = summary.get("items") or summary["subtotal"]  # subtotal includes shipping
         lines = [f"{k}={v.amount} {v.currency}" for k, v in summary.items()]
         lines.append(f"threshold={budget_per_item} x {items_count} = {threshold} {currency}")
         allure.attach("\n".join(lines),

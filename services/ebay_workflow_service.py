@@ -42,6 +42,9 @@ class EBayWorkflowService:
             return False
         try:
             LoginPage(self.page, credentials).login()
+            # חשבון בלי כתובת מועבר מהסל לטופס 'Complete your account info'; בודקים כבר עכשיו,
+            # כדי לעבור לאורח לפני שמתחילים, ולא להיכשל בסוף התרחיש
+            self.cart_page.open()
         except SignInRequiredError as e:
             if env_flag("EBAY_REQUIRE_LOGIN", False):
                 raise

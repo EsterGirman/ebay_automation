@@ -4,7 +4,7 @@ import allure
 from playwright.sync_api import TimeoutError as PlaywrightTimeout
 
 from utils.parsing import Money, item_id, parse_cart_item_count, parse_cart_summary
-from .base_page import BasePage
+from .base_page import AccountInfoRequiredError, BasePage
 from .login_page import LoginPage
 
 
@@ -30,6 +30,9 @@ class CartPage(BasePage):
         LoginPage(self.page).complete_sign_in_if_prompted()
         if not self.is_cart_page():                 # אחרי התחברות eBay לא תמיד חוזרת לסל
             self.navigate(self.CART_URL)
+        if self.is_account_upgrade_page():
+            self.take_screenshot("account_info_required")
+            raise AccountInfoRequiredError(AccountInfoRequiredError.MESSAGE)
 
     @allure.step("ריקון הסל לפני התרחיש")
     def clear(self, max_items: int = 30) -> int:

@@ -19,6 +19,13 @@ class SignInRequiredError(Exception):
     """eBay דורשת התחברות וההתחברות לא הושלמה."""
 
 
+class AccountInfoRequiredError(SignInRequiredError):
+    """החשבון מחובר, אבל eBay מעבירה לטופס 'Complete your account info' (אין כתובת) במקום לסל."""
+
+    MESSAGE = ("eBay redirects to 'Complete your account info' (the test account has no address), "
+               "so the cart can't be used. Complete it once in a regular browser, or run as guest.")
+
+
 class BasePage:
     # טקסטים שמעידים על עמוד חסימה / שגיאה כללית של eBay
     BLOCK_MARKERS = (
@@ -138,6 +145,10 @@ class BasePage:
 
     def is_cart_page(self) -> bool:
         return self._host().startswith("cart.")
+
+    def is_account_upgrade_page(self) -> bool:
+        """הטופס 'Complete your account info' (signup.ebay.com/fpa/upgrade)."""
+        return "/fpa/upgrade" in self.page.url or self._host().startswith("signup.")
 
     def wait_for_element_visible(self, selector: str, timeout: int = None) -> Locator:
         locator = self.page.locator(selector).first

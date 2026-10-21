@@ -14,7 +14,7 @@ from services.ebay_workflow_service import EBayWorkflowService
 from utils.config import AUTH_STATE_FILE, Credentials, Profile, Scenario, env_flag, load_profile
 
 _HEAVY_MEDIA = re.compile(r"\.(png|jpe?g|gif|webp|avif|mp4|webm)(\?|$)", re.IGNORECASE)
-_AUTH_MARKERS = ("captcha", "signin.ebay.com")
+_AUTH_MARKERS = ("captcha", "signin.ebay.com", "accounts.ebay.com")
 
 
 @pytest.hookimpl(tryfirst=True)

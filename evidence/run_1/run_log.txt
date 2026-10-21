@@ -1,0 +1,49 @@
+INFO     HomePage:base_page.py:72 Navigating to URL: https://www.ebay.com/
+INFO     LoginPage:base_page.py:72 Navigating to URL: https://www.ebay.com/mye/myebay/summary
+INFO     LoginPage:login_page.py:59 Sign-in / verification page shown, completing it
+WARNING  LoginPage:login_page.py:68 eBay asks for verification (CAPTCHA / code) - complete it in the browser window
+INFO     LoginPage:base_page.py:173 Screenshot saved: D:\הנדסאים\ebay_automation\reports\screenshots\signin_verification.png
+INFO     LoginPage:login_page.py:128 Auth state saved: D:\הנדסאים\ebay_automation\.auth\ebay_state.json
+INFO     LoginPage:login_page.py:84 Sign-in completed | url=https://signup.ebay.com/fpa/upgrade?ru=https%3A%2F%2Fwww.ebay.com%2Fmye%2Fmyebay%2Fsummary
+INFO     LoginPage:base_page.py:72 Navigating to URL: https://www.ebay.com/mye/myebay/summary
+INFO     LoginPage:login_page.py:128 Auth state saved: D:\הנדסאים\ebay_automation\.auth\ebay_state.json
+INFO     LoginPage:login_page.py:46 Signed in (verified on My eBay)
+INFO     CartPage:base_page.py:72 Navigating to URL: https://cart.ebay.com/
+INFO     CartPage:base_page.py:72 Navigating to URL: https://cart.ebay.com/
+INFO     CartPage:base_page.py:173 Screenshot saved: D:\הנדסאים\ebay_automation\reports\screenshots\account_info_required.png
+WARNING  EBayWorkflowService:ebay_workflow_service.py:57 Sign-in not completed - continuing as guest (eBay redirects to 'Complete your account info' (the test account has no address), so the cart can't be used. Complete it once in a regular browser, or run as guest.)
+INFO     HomePage:base_page.py:72 Navigating to URL: https://www.ebay.com/
+INFO     CartPage:base_page.py:72 Navigating to URL: https://cart.ebay.com/
+WARNING  CartPage:cart_page.py:65 Cart content did not finish loading
+INFO     CartPage:cart_page.py:56 Cart cleared (0 items removed)
+INFO     SearchResultsPage:base_page.py:72 Navigating to URL: https://www.ebay.com/sch/i.html?_nkw=shoes&LH_BIN=1&_ipg=60
+INFO     SearchResultsPage:search_results_page.py:65 Price filter applied via page UI
+INFO     SearchResultsPage:search_results_page.py:155 Page stats: {'cards': 163, 'no_link': 2, 'no_price': 32, 'other_currency': 0, 'over_budget': 0, 'duplicate': 0, 'collected': 10, 'page_url': 'https://www.ebay.com/sch/i.html?_nkw=shoes&LH_BIN=1&_ipg=60&rt=nc&_udhi=220', 'sample': ['$20.00', '$20.00', 'ILS 19.31']}
+INFO     SearchResultsPage:base_page.py:173 Screenshot saved: D:\הנדסאים\ebay_automation\reports\screenshots\search_results.png
+INFO     EBayWorkflowService:ebay_workflow_service.py:85 Total collected: 5/5 (+5 spare)
+INFO     ItemDetailsPage:base_page.py:72 Navigating to URL: https://www.ebay.com/itm/315635216467
+INFO     ItemDetailsPage:item_details_page.py:52 Selected variant (select): 11116
+INFO     ItemDetailsPage:base_page.py:173 Screenshot saved: D:\הנדסאים\ebay_automation\reports\screenshots\item_1_added_to_cart.png
+INFO     ItemDetailsPage:base_page.py:72 Navigating to URL: https://www.ebay.com/itm/178064614857
+INFO     ItemDetailsPage:item_details_page.py:52 Selected variant (select): 267
+INFO     ItemDetailsPage:base_page.py:173 Screenshot saved: D:\הנדסאים\ebay_automation\reports\screenshots\item_2_added_to_cart.png
+INFO     ItemDetailsPage:base_page.py:72 Navigating to URL: https://www.ebay.com/itm/397739471632
+INFO     ItemDetailsPage:item_details_page.py:52 Selected variant (select): 260
+INFO     ItemDetailsPage:base_page.py:173 Screenshot saved: D:\הנדסאים\ebay_automation\reports\screenshots\item_3_added_to_cart.png
+INFO     ItemDetailsPage:base_page.py:72 Navigating to URL: https://www.ebay.com/itm/137746867062
+INFO     ItemDetailsPage:item_details_page.py:52 Selected variant (select): 11450
+INFO     ItemDetailsPage:item_details_page.py:94 Selected variant (listbox): Colors: Black
+INFO     ItemDetailsPage:item_details_page.py:94 Selected variant (listbox): Sizes: US6/UK4/EU36
+INFO     ItemDetailsPage:base_page.py:173 Screenshot saved: D:\הנדסאים\ebay_automation\reports\screenshots\item_4_added_to_cart.png
+INFO     ItemDetailsPage:base_page.py:72 Navigating to URL: https://www.ebay.com/itm/206627547121
+INFO     ItemDetailsPage:item_details_page.py:52 Selected variant (select): 237
+INFO     ItemDetailsPage:item_details_page.py:94 Selected variant (listbox): UK Shoe Size: 10
+INFO     ItemDetailsPage:base_page.py:173 Screenshot saved: D:\הנדסאים\ebay_automation\reports\screenshots\item_5_added_to_cart.png
+INFO     EBayWorkflowService:ebay_workflow_service.py:114 Added 5/5 items to cart
+INFO     CartPage:base_page.py:72 Navigating to URL: https://cart.ebay.com/
+INFO     CartPage:cart_page.py:97 All 5 added items are in the cart
+INFO     CartPage:base_page.py:173 Screenshot saved: D:\הנדסאים\ebay_automation\reports\screenshots\cart_page.png
+INFO     CartPage:cart_page.py:104 Cart summary: items=701.48 ILS, shipping=424.72 ILS, subtotal=1126.2 ILS
+INFO     CartPage:base_page.py:72 Navigating to URL: https://cart.ebay.com/
+WARNING  CartPage:cart_page.py:65 Cart content did not finish loading
+INFO     CartPage:cart_page.py:56 Cart cleared (5 items removed)

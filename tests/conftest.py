@@ -34,7 +34,8 @@ def pytest_sessionfinish(session):
     props = {
         "Site": "https://www.ebay.com",
         "Browser": f"chromium ({session.config.getoption('--browser-channel') or 'bundled'})",
-        "Auth": "signed-in (EBAY_USER)" if Credentials.from_env() else "guest",
+        # בפועל ייתכן מעבר לאורח (fallback) - מסומן בתווית auth של הטסט עצמו
+        "Credentials": "EBAY_USER provided" if Credentials.from_env() else "none (guest)",
         "Profile": load_profile().name,
         "Test data": "config/test_data.json",
     }

@@ -192,6 +192,12 @@ config/     test_data.json - קלטי הבדיקה (Data-Driven)
   ברשת עם סינון תוכן (כגון NetFree) הטעינה איטית יותר וחלק מהתמונות נחסמות.
 
 ## הוכחת הרצה
-צילומי מסך מהרצות שעברו נמצאים ב-[`evidence/`](evidence/), תיקייה לכל הרצה: פלט ההרצה (`1 passed`),
-תוצאות החיפוש אחרי פילטר המחיר, כל פריט שנוסף לסל, עמוד הסל עם הסכומים, ודוח Allure.
+**הרצה 1 – עברה:** 5/5 פריטים בסל, פריטים 701.48 ₪ ≤ 1,100 ₪. פירוט מלא: [`evidence/run_1`](evidence/run_1/).
+
+![Allure overview – 100% passed](evidence/run_1/allure_overview.png)
+
+![Allure – test steps](evidence/run_1/allure_test_steps.png)
+
+![Cart page](evidence/run_1/screenshots/cart_page.png)
+
 (`reports/` ו-`allure-results/` לא נשמרים ב-git: הם נוצרים מחדש בכל הרצה.)

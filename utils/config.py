@@ -34,8 +34,11 @@ class Credentials:
         username, password = os.getenv("EBAY_USER"), os.getenv("EBAY_PASS")
         return cls(username, password) if username and password else None
 
-    def __repr__(self) -> str:                     # שלא תודפס סיסמה ללוג/דוח בטעות
-        return f"Credentials(username={self.username!r}, password='***')"
+    def __repr__(self) -> str:
+        # Allure מציג פרמטרים של צעדים - שלא תודפס סיסמה, וגם לא המייל המלא, לדוח או ללוג
+        name, _, domain = self.username.partition("@")
+        masked = f"{name[:3]}***@{domain}" if domain else f"{name[:3]}***"
+        return f"Credentials(username='{masked}', password='***')"
 
 
 @dataclass(frozen=True)

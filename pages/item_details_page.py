@@ -4,6 +4,7 @@ import allure
 from playwright.sync_api import Locator, TimeoutError as PlaywrightTimeout
 
 from .base_page import AccountInfoRequiredError, BasePage, SignInRequiredError
+from .cart_page import CartPage
 from .login_page import LoginPage
 
 
@@ -140,7 +141,13 @@ class ItemDetailsPage(BasePage):
             button.scroll_into_view_if_needed()
             button.click()
             step = "wait_for_confirmation"
-            self._wait_for_added_confirmation()
+            try:
+                self._wait_for_added_confirmation()
+            except ItemNotAddedError:
+                step = "check_cart"
+                if not CartPage(self.page).contains_item(url):  # slow confirmation != not added
+                    raise
+                self.logger.info(f"{label}: no confirmation shown, but the item is in the cart")
             self.take_screenshot(f"{label}_added_to_cart")
             return True
         except SignInRequiredError:

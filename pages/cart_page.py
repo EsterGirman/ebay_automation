@@ -76,6 +76,13 @@ class CartPage(BasePage):
             raise AssertionError("Could not read cart totals (empty cart or changed layout).")
         return summary
 
+    # Is this item in the cart?
+    @allure.step("בדיקה אם הפריט בסל: {url}")
+    def contains_item(self, url: str) -> bool:
+        self.open()
+        self._wait_until_loaded()
+        return item_id(url) in self.get_item_ids()
+
     # Item IDs in the cart
     def get_item_ids(self) -> Set[str]:
         links = self.page.locator(self.CART_ITEM_LINK)

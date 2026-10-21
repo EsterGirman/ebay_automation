@@ -194,6 +194,8 @@ config/     test_data.json - קלטי הבדיקה (Data-Driven)
 ## הוכחת הרצה
 **הרצה 1 – עברה:** 5/5 פריטים בסל, פריטים 701.48 ₪ ≤ 1,100 ₪. פירוט מלא: [`evidence/run_1`](evidence/run_1/).
 
+![PyCharm – Tests passed: 1 of 1](evidence/run_1/pycharm_passed.png)
+
 ![Allure overview – 100% passed](evidence/run_1/allure_overview.png)
 
 ![Allure – test steps](evidence/run_1/allure_test_steps.png)

@@ -11,6 +11,7 @@
 | אימות סכום | פריטים **701.48 ₪ ≤ 1,100 ₪** (220 × 5). משלוח 424.72 ₪, Subtotal 1,126.20 ₪ (מוצגים, לא חלק מהאימות – ראו README) |
 
 ## קבצים
+- [`pycharm_passed.png`](pycharm_passed.png) – PyCharm: **Tests passed: 1 of 1 test – 5 min 39 sec**
 - [`allure_overview.png`](allure_overview.png) – סיכום הדוח: 1 טסט, 100% עבר
 - [`allure_test_steps.png`](allure_test_steps.png) – צעדי הטסט, כולם עברו
 - [`allure-report/index.html`](allure-report/index.html) – הדוח המלא (להוריד ולפתוח בדפדפן)

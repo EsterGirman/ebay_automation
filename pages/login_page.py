@@ -4,7 +4,7 @@ from urllib.parse import urlparse
 import allure
 from playwright.sync_api import Page
 
-from utils.config import AUTH_STATE_FILE, Credentials, env_int
+from utils.config import AUTH_STATE_FILE, Credentials, load_profile
 from .base_page import BasePage, SignInRequiredError
 
 
@@ -24,7 +24,7 @@ class LoginPage(BasePage):
         super().__init__(page)
         self.credentials = credentials or Credentials.from_env()
         # זמן להשלמה ידנית בחלון (CAPTCHA / קוד אימות) - eBay לא מאפשרת לעקוף אותם וגם לא צריך
-        self.manual_wait_ms = env_int("EBAY_LOGIN_WAIT_SEC", 120) * 1000
+        self.manual_wait_ms = load_profile().login_wait_sec * 1000
 
     @allure.step("בדיקה האם המשתמש מחובר")
     def is_signed_in(self) -> bool:

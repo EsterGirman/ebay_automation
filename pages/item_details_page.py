@@ -74,7 +74,7 @@ class ItemDetailsPage(BasePage):
         except Exception:
             return False
 
-    def _wait_until_enabled(self, button: Locator, timeout_ms: int = 5000) -> None:
+    def _wait_until_enabled(self, button: Locator, timeout_ms: int = 15000) -> None:
         for _ in range(timeout_ms // 500):
             if not self._is_disabled(button):
                 return
@@ -103,12 +103,12 @@ class ItemDetailsPage(BasePage):
             step = "select_variants"
             self._select_random_variants()
             step = "find_add_to_cart_button"
-            button = self.wait_for_element_visible(self.ADD_TO_CART_BUTTON, timeout=15000)
+            button = self.wait_for_element_visible(self.ADD_TO_CART_BUTTON)
             step = "button_enabled"
             self._wait_until_enabled(button)
             step = "click_add_to_cart"
             button.scroll_into_view_if_needed()
-            button.click(timeout=10000)
+            button.click()
             step = "wait_for_confirmation"
             self._wait_for_added_confirmation()
             self.take_screenshot(f"{label}_added_to_cart")

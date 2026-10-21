@@ -11,7 +11,7 @@ from playwright.sync_api import BrowserContext, Page
 
 from pages.base_page import SCREENSHOTS_DIR, BasePage
 from services.ebay_workflow_service import EBayWorkflowService
-from utils.config import AUTH_STATE_FILE, Credentials, Scenario, env_flag
+from utils.config import AUTH_STATE_FILE, Credentials, Profile, Scenario, env_flag, load_profile
 
 _HEAVY_MEDIA = re.compile(r"\.(png|jpe?g|gif|webp|avif|mp4|webm)(\?|$)", re.IGNORECASE)
 _AUTH_MARKERS = ("captcha", "signin.ebay.com")
@@ -20,7 +20,7 @@ _AUTH_MARKERS = ("captcha", "signin.ebay.com")
 @pytest.hookimpl(tryfirst=True)
 def pytest_configure(config):
     """נתיבי הדוחות יחסיים לשורש הפרויקט ולא לתיקייה שממנה הורץ pytest (PyCharm מריץ מ-tests/)."""
-    for option in ("allure_report_dir", "output"):
+    for option in ("allure_report_dir", "output", "xmlpath"):
         value = getattr(config.option, option, None)
         if value and not Path(value).is_absolute():
             setattr(config.option, option, str(config.rootpath / value))
@@ -35,6 +35,7 @@ def pytest_sessionfinish(session):
         "Site": "https://www.ebay.com",
         "Browser": f"chromium ({session.config.getoption('--browser-channel') or 'bundled'})",
         "Auth": "signed-in (EBAY_USER)" if Credentials.from_env() else "guest",
+        "Profile": load_profile().name,
         "Test data": "config/test_data.json",
     }
     (Path(results_dir) / "environment.properties").write_text(
@@ -49,9 +50,16 @@ def pytest_runtest_makereport(item, call):
 
 
 @pytest.fixture(scope="session")
-def browser_type_launch_args(browser_type_launch_args):
+def profile() -> Profile:
+    """פרופיל ההרצה (config/profiles.json, נבחר ב-EBAY_PROFILE)."""
+    return load_profile()
+
+
+@pytest.fixture(scope="session")
+def browser_type_launch_args(browser_type_launch_args, profile: Profile):
     return {
         **browser_type_launch_args,
+        "headless": profile.headless,
         # בלי דגל האוטומציה של Chrome (navigator.webdriver / פס "Chrome is being controlled")
         "args": ["--start-maximized", "--disable-blink-features=AutomationControlled"],
         "ignore_default_args": ["--enable-automation"],
@@ -67,10 +75,10 @@ def browser_context_args(browser_context_args):
 
 
 @pytest.fixture
-def context(context: BrowserContext) -> BrowserContext:
-    context.set_default_timeout(15_000)
+def context(context: BrowserContext, profile: Profile) -> BrowserContext:
+    context.set_default_timeout(profile.default_timeout_ms)
     context.on("page", BasePage.install_popup_handlers)   # גם ללשוניות הפריטים
-    if env_flag("EBAY_BLOCK_IMAGES", True):
+    if profile.block_images:
         # תמונות ווידאו לא נחוצים לבדיקה וכבדים; חסימתם מקצרת טעינה ברשת איטית/מסוננת
         context.route(_HEAVY_MEDIA, _block_media_except_auth)
     return context

@@ -7,6 +7,7 @@ from typing import List, Optional
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 TEST_DATA_FILE = PROJECT_ROOT / "config" / "test_data.json"
+PROFILES_FILE = PROJECT_ROOT / "config" / "profiles.json"
 # מצב התחברות שמור (עוגיות + localStorage) - נוצר אחרי התחברות מוצלחת ונטען בהרצות הבאות
 AUTH_STATE_FILE = PROJECT_ROOT / ".auth" / "ebay_state.json"
 REPORTS_DIR = PROJECT_ROOT / "reports"
@@ -37,9 +38,36 @@ class Credentials:
         return f"Credentials(username={self.username!r}, password='***')"
 
 
+@dataclass(frozen=True)
+class Profile:
+    """פרופיל הרצה (סביבה): איך מריצים, להבדיל מ-Scenario שקובע מה בודקים."""
+    name: str
+    headless: bool
+    block_images: bool
+    default_timeout_ms: int
+    login_wait_sec: int
+
+
 def load_scenarios(path: Path = TEST_DATA_FILE) -> List[Scenario]:
     data = json.loads(path.read_text(encoding="utf-8"))
     return [Scenario(**item) for item in data["scenarios"]]
+
+
+def load_profile(path: Path = PROFILES_FILE) -> Profile:
+    """הפרופיל נבחר ב-EBAY_PROFILE (ברירת מחדל local). משתני סביבה ספציפיים גוברים על הפרופיל:
+    EBAY_HEADLESS, EBAY_BLOCK_IMAGES, EBAY_TIMEOUT_MS, EBAY_LOGIN_WAIT_SEC."""
+    name = os.getenv("EBAY_PROFILE", "local")
+    profiles = json.loads(path.read_text(encoding="utf-8"))
+    if name not in profiles:
+        raise ValueError(f"Unknown EBAY_PROFILE '{name}'. Available: {', '.join(profiles)}")
+    p = profiles[name]
+    return Profile(
+        name=name,
+        headless=env_flag("EBAY_HEADLESS", p["headless"]),
+        block_images=env_flag("EBAY_BLOCK_IMAGES", p["block_images"]),
+        default_timeout_ms=env_int("EBAY_TIMEOUT_MS", p["default_timeout_ms"]),
+        login_wait_sec=env_int("EBAY_LOGIN_WAIT_SEC", p["login_wait_sec"]),
+    )
 
 
 def env_int(name: str, default: int) -> int:

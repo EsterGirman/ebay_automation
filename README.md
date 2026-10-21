@@ -19,8 +19,8 @@
 | (תוספת) אימות שהפריטים באמת בסל: מספר ב-Order summary + מזהי הפריטים | `EBayWorkflowService.assert_items_in_cart` → `CartPage.assert_contains_items` |
 | Screenshot/Trace של עמוד הסל | `cart_page.png` + Trace מלא של התרחיש (`--tracing=on`) |
 | POM / OOP | `pages/` – מחלקה לכל עמוד, ירושה מ-`BasePage` |
-| Data-Driven מקובץ חיצוני | `config/test_data.json` → `utils/config.load_scenarios` → `pytest.mark.parametrize` |
-| דוחות | Allure (`allure-results/`), כולל צעדים, צילומים, Trace ופרטי סביבה |
+| Data-Driven מקובץ חיצוני | `config/test_data.json` → `utils/config.load_scenarios` → `pytest.mark.parametrize`; פרופילי הרצה ב-`config/profiles.json` + משתני סביבה |
+| דוחות | Allure (`allure-results/`) עם צעדים, צילומים, Trace ופרטי סביבה; JUnit XML (`reports/junit.xml`) |
 
 ## התקנה (PyCharm)
 1. File > Open > תיקיית הפרויקט. Virtual Environment עם Python 3.9+.
@@ -28,16 +28,23 @@
 3. נדרש Google Chrome מותקן (הבדיקה רצה בערוץ `chrome` של Playwright).
 
 ## הרצה
-    pytest                    # הכול
+דרישות מקדימות: Python 3.9+, Google Chrome, ול-Allure: Java 8+ ו-[Allure CLI](https://allurereport.org/docs/install/).
+
+    pip install -r requirements.txt
+    pytest                    # הכול: unit + E2E (דוח אחד)
     pytest -m "not e2e"       # בדיקות unit בלבד (שניות, בלי דפדפן)
     pytest -m e2e             # התרחיש מול האתר
-    allure serve allure-results   # דורש Allure CLI מותקן (https://allurereport.org/docs/install/)
 
-ברשת איטית או מסוננת הרצת E2E אורכת כ-10 דקות (רוב הזמן: בדיקות הבוט של eBay וטעינת עמודים).
+## דוחות
+- **Allure:** `allure serve allure-results` פותח את הדוח בדפדפן. לדוח סטטי להגשה:
+  `allure generate allure-results --clean --single-file -o allure-report` (קובץ `index.html` אחד).
+  התוצאות מתאפסות בכל הרצה (`--clean-alluredir`), כך שהדוח מציג את ההרצה האחרונה בלבד.
+- **JUnit XML:** `reports/junit.xml` (לשילוב ב-CI).
+- **Trace:** `playwright show-trace reports/test-results/<test>/trace.zip` - כל צעד, עם צילום ו-DOM.
+- **צילומי מסך:** `reports/screenshots/` (מתרוקנת בתחילת כל הרצת E2E). הכול מצורף גם לדוח Allure.
 
-תוצרים: צילומי מסך ב-`reports/screenshots/` (התיקייה מתרוקנת בתחילת כל הרצת E2E, כדי שלא יתערבבו
-צילומים מהרצות קודמות), Trace וצילום בכישלון ב-`reports/test-results/`
-(`playwright show-trace <path>/trace.zip`). הכול מצורף גם לדוח Allure.
+ברשת איטית או מסוננת הרצת E2E אורכת כ-10 דקות (רוב הזמן: בדיקות הבוט של eBay וטעינת עמודים);
+מומלץ `EBAY_PROFILE=slow_network`.
 
 ## התחברות
 פרטי ההתחברות מגיעים **רק** ממשתני סביבה (ב-PyCharm: Run > Edit Configurations > Environment variables):
@@ -45,9 +52,10 @@
 | משתנה | תפקיד |
 |---|---|
 | `EBAY_USER`, `EBAY_PASS` | חשבון בדיקות ייעודי. בלעדיהם התרחיש רץ כאורח (eBay מאפשרת סל לאורחים) |
-| `EBAY_LOGIN_WAIT_SEC` | זמן להשלמה ידנית של CAPTCHA / קוד אימות בחלון (ברירת מחדל 120) |
+| `EBAY_PROFILE` | פרופיל הרצה: `local` / `slow_network` / `ci` (ראו "פרופילי הרצה") |
+| `EBAY_LOGIN_WAIT_SEC` | זמן להשלמה ידנית של CAPTCHA / קוד אימות בחלון (ברירת מחדל לפי הפרופיל) |
 | `EBAY_REQUIRE_LOGIN` | `1` כדי שהתחברות שלא הושלמה תכשיל את הטסט (ברירת מחדל: ממשיכים כאורח) |
-| `EBAY_BLOCK_IMAGES` | `0` כדי לטעון תמונות (ברירת מחדל: חסומות, לטעינה מהירה) |
+| `EBAY_BLOCK_IMAGES` | `0` כדי לטעון תמונות (ברירת מחדל לפי הפרופיל: חסומות, לטעינה מהירה) |
 | `EBAY_KEEP_CART` | `1` כדי להשאיר את הסל בסוף הטסט לבדיקה ידנית (ברירת מחדל: מתרוקן) |
 
 אחרי התחברות מוצלחת מצב ההתחברות נשמר ב-`.auth/ebay_state.json` (מחוץ ל-git) ונטען בהרצות הבאות,
@@ -74,6 +82,17 @@
 | `currency` | המטבע של המחירים והתקציב. פריטים במטבע אחר מדולגים, כי אי אפשר להשוות ש"ח לדולר |
 | `max_pages` | מספר עמודי תוצאות מקסימלי ל-Paging |
 
+**פרופילי הרצה** - `config/profiles.json`, נבחרים ב-`EBAY_PROFILE` (ברירת מחדל `local`). התרחיש קובע
+*מה* בודקים, הפרופיל קובע *איך* מריצים:
+
+| פרופיל | שימוש | headless | timeout | זמן להשלמת CAPTCHA/קוד |
+|---|---|---|---|---|
+| `local` | הרצה רגילה מהמחשב | לא | 15 שנ' | 120 שנ' |
+| `slow_network` | רשת איטית/מסוננת | לא | 40 שנ' | 300 שנ' |
+| `ci` | שרת CI, בלי מסך | כן | 30 שנ' | 0 (ממשיך כאורח מיד) |
+
+משתני סביבה גוברים על הפרופיל: `EBAY_HEADLESS`, `EBAY_BLOCK_IMAGES`, `EBAY_TIMEOUT_MS`, `EBAY_LOGIN_WAIT_SEC`.
+
 ## ארכיטקטורה
 ארבע שכבות, וכל שכבה מכירה רק את זו שמתחתיה:
 
@@ -92,6 +111,20 @@ config/     test_data.json - קלטי הבדיקה (Data-Driven)
   `add_items_to_cart`, `assert_cart_total_not_exceeds`, ובנוסף `clear_cart` ו-`assert_items_in_cart`.
   שירות אחד, כי זה תהליך עסקי אחד; פיצול ל-AuthService/CartService נכון כשיש כמה תהליכים.
 - הטסט לא מכיר XPath, כפתורים או דוחות: שינוי ממשק של eBay מתוקן ב-`pages/` בלבד.
+
+## מגבלות והנחות
+- **אתר אמיתי, לא סביבת בדיקות:** eBay מפעילה הגנת בוטים (בדיקת דפדפן, CAPTCHA, חסימה זמנית).
+  הטסט מטפל בהן וממתין, אבל הרצות רבות ברצף או רשת מסוננת יכולות להאט אותו מאוד או להכשיל אותו;
+  במקרה כזה הכישלון מוסבר (`SiteBlockedError`) ומצולם. הוכחות להרצות שעברו - ב-[`evidence/`](evidence/).
+- **התחברות / אורח:** התחברות אמיתית עם חשבון בדיקות מ-`EBAY_USER`/`EBAY_PASS`. CAPTCHA וקוד אימות
+  לא נעקפים; אם לא הושלמו בזמן, התרחיש ממשיך **כאורח** (מסומן בדוח). בלי פרטי התחברות - אורח מההתחלה.
+- **מטבע:** התקציב והמחירים במטבע אחד (`currency`, ברירת מחדל בנתונים: ILS כפי ש-eBay מציגה לגולש
+  מישראל). אין המרת מטבע; פריט במטבע אחר מדולג.
+- **מחיר = מחיר הפריט, בלי משלוח:** גם בסינון בחיפוש וגם באימות הסל (המשלוח מוצג בדוח).
+- **כמות 1 לכל פריט;** וריאנטים (מידה/צבע) נבחרים אקראית מבין הזמינים.
+- **Buy It Now בלבד:** פריטים במכירה פומבית לא ניתנים להוספה לסל.
+- **ממשק eBay משתנה:** הלוקייטורים מבוססים על מבנה (`/itm/`, `id`, `aria`) ולא על שמות class מקריים,
+  ולפילטר המחיר יש גיבוי - אבל שינוי עיצוב משמעותי באתר ידרוש עדכון של `pages/`.
 
 ## החלטות תכנון
 

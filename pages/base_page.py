@@ -26,7 +26,6 @@ class BasePage:
         "pardon our interruption",
         "please verify yourself",
     )
-    DEFAULT_TIMEOUT_MS = 10_000
 
     # עמוד בדיקת דפדפן של eBay - עובר לבד אחרי כמה שניות, לא חסימה
     BROWSER_CHECK_MARKER = "checking your browser before you access ebay"
@@ -138,7 +137,7 @@ class BasePage:
 
     def wait_for_element_visible(self, selector: str, timeout: int = None) -> Locator:
         locator = self.page.locator(selector).first
-        locator.wait_for(state="visible", timeout=timeout or self.DEFAULT_TIMEOUT_MS)
+        locator.wait_for(state="visible", timeout=timeout)   # None = ברירת המחדל של הפרופיל
         return locator
 
     def is_visible_within(self, selector: str, timeout: int) -> bool:

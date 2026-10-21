@@ -36,15 +36,18 @@ class BasePage:
 
     SHIP_TO_TEXT = re.compile(r"Are you shipping to", re.IGNORECASE)  # injected dynamically - not reachable by XPath
 
+    # Keep page and logger
     def __init__(self, page: Page):
         self.page = page
         self.logger = logging.getLogger(self.__class__.__name__)
 
+    # Auto-confirm the ship-to popup
     @classmethod
     def install_popup_handlers(cls, page: Page) -> None:
         page.add_locator_handler(page.get_by_text(cls.SHIP_TO_TEXT).first,
                                  lambda: cls(page).confirm_ship_to_if_shown())
 
+    # Confirm ship-to popup if shown
     def confirm_ship_to_if_shown(self) -> bool:
         if not self.page.get_by_text(self.SHIP_TO_TEXT).first.is_visible():
             return False
@@ -56,6 +59,7 @@ class BasePage:
             self.logger.warning(f"Could not confirm ship-to popup: {str(e).splitlines()[0]}")
         return True
 
+    # Open URL, detect block pages
     @allure.step("ניווט לכתובת: {url}")
     def navigate(self, url: str, retries: int = 1, retry_wait_ms: int = 20_000,
                  wait_until: str = "domcontentloaded", timeout: int = 30_000) -> None:
@@ -74,6 +78,7 @@ class BasePage:
             "Wait a few hours / change network, or run again later."
         )
 
+    # goto with network-error retry
     def _goto(self, url: str, wait_until: str, timeout: int, network_retries: int = 2) -> None:
         for attempt in range(network_retries + 1):
             try:
@@ -88,6 +93,7 @@ class BasePage:
                 self.logger.warning(f"Navigation interrupted ({str(e).splitlines()[0]}), retrying")
                 self.page.wait_for_timeout(3000 * (attempt + 1))
 
+    # Wait out eBay's browser check
     def _wait_for_browser_check(self) -> None:
         if not self._on_browser_check():
             return
@@ -105,6 +111,7 @@ class BasePage:
         raise SiteBlockedError("eBay browser check did not pass. Too many requests in a short "
                                "time - wait 15-30 minutes and run again.")
 
+    # Is the browser check shown?
     def _on_browser_check(self) -> bool:
         try:
             return self.BROWSER_CHECK_MARKER in self.page.inner_text("body", timeout=10000).lower()
@@ -113,6 +120,7 @@ class BasePage:
         except PlaywrightError:
             return True
 
+    # Is a block page shown?
     def is_blocked(self) -> bool:
         try:
             text = self.page.inner_text("body", timeout=10000).lower()
@@ -120,23 +128,29 @@ class BasePage:
             return False
         return any(marker in text for marker in self.BLOCK_MARKERS)
 
+    # Current URL host
     def _host(self) -> str:
         return urlparse(self.page.url).netloc  # host, not substring: sign-in URL contains ru=cart...
 
+    # On the sign-in page?
     def is_signin_page(self) -> bool:
         return self._host().startswith("signin.")
 
+    # On the cart page?
     def is_cart_page(self) -> bool:
         return self._host().startswith("cart.")
 
+    # On 'Complete your account info'?
     def is_account_upgrade_page(self) -> bool:
         return "/fpa/upgrade" in self.page.url or self._host().startswith("signup.")
 
+    # Wait until element is visible
     def wait_for_element_visible(self, selector: str, timeout: int = None) -> Locator:
         locator = self.page.locator(selector).first
         locator.wait_for(state="visible", timeout=timeout)
         return locator
 
+    # Visible within timeout? (no raise)
     def is_visible_within(self, selector: str, timeout: int) -> bool:
         try:
             self.wait_for_element_visible(selector, timeout)
@@ -144,6 +158,7 @@ class BasePage:
         except PlaywrightTimeout:
             return False
 
+    # Screenshot to file and report
     @allure.step("לכידת צילום מסך: {name}")
     def take_screenshot(self, name: str) -> str:
         safe_name = re.sub(r"[^\w\-]+", "_", name)

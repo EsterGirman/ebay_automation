@@ -27,11 +27,13 @@ class Credentials:
     username: str
     password: str
 
+    # Credentials from env vars
     @classmethod
     def from_env(cls) -> Optional["Credentials"]:
         username, password = os.getenv("EBAY_USER"), os.getenv("EBAY_PASS")
         return cls(username, password) if username and password else None
 
+    # Mask email and password
     def __repr__(self) -> str:
         name, _, domain = self.username.partition("@")
         masked = f"{name[:3]}***@{domain}" if domain else f"{name[:3]}***"
@@ -47,11 +49,13 @@ class Profile:
     login_wait_sec: int
 
 
+# Load test scenarios from JSON
 def load_scenarios(path: Path = TEST_DATA_FILE) -> List[Scenario]:
     data = json.loads(path.read_text(encoding="utf-8"))
     return [Scenario(**item) for item in data["scenarios"]]
 
 
+# Load run profile + env overrides
 def load_profile(path: Path = PROFILES_FILE) -> Profile:
     name = os.getenv("EBAY_PROFILE", "local")
     profiles = json.loads(path.read_text(encoding="utf-8"))
@@ -67,9 +71,11 @@ def load_profile(path: Path = PROFILES_FILE) -> Profile:
     )
 
 
+# Int from env var
 def env_int(name: str, default: int) -> int:
     return int(os.getenv(name, default))
 
 
+# Bool from env var
 def env_flag(name: str, default: bool) -> bool:
     return os.getenv(name, str(default)).strip().lower() in ("1", "true", "yes", "on")

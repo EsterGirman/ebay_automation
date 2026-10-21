@@ -31,10 +31,12 @@ class ItemDetailsPage(BasePage):
         "or contains(., 'Go to cart') or contains(., 'View cart')]"
     )
 
+    # Is the option selectable?
     def _is_good_option(self, text: str) -> bool:
         t = text.strip().lower()
         return bool(t) and not any(w in t for w in self.BAD_OPTION_WORDS)
 
+    # Pick random size/color
     def _select_random_variants(self) -> None:
         for dropdown in self.page.locator(self.VARIANT_SELECT).all():
             try:
@@ -54,6 +56,7 @@ class ItemDetailsPage(BasePage):
                 if self._pick_from_listbox(button):
                     break
 
+    # Pick from one custom listbox
     def _pick_from_listbox(self, button: Locator) -> bool:
         try:
             button.scroll_into_view_if_needed()
@@ -88,6 +91,7 @@ class ItemDetailsPage(BasePage):
             self.page.keyboard.press("Escape")
             return False
 
+    # Is the button disabled?
     @staticmethod
     def _is_disabled(button: Locator) -> bool:
         try:
@@ -97,6 +101,7 @@ class ItemDetailsPage(BasePage):
         except Exception:
             return False
 
+    # Wait for Add to cart to enable
     def _wait_until_enabled(self, button: Locator, timeout_ms: int = 15000) -> None:
         for _ in range(timeout_ms // 500):
             if not self._is_disabled(button):
@@ -105,6 +110,7 @@ class ItemDetailsPage(BasePage):
         raise ItemNotAddedError("Add to cart is disabled (item not purchasable here, "
                                 "selection required, or page not fully loaded)")
 
+    # Wait for 'Added to cart'
     def _wait_for_added_confirmation(self) -> None:
         try:
             self.page.wait_for_selector(self.ADDED_CONFIRMATION, timeout=10000)
@@ -118,6 +124,7 @@ class ItemDetailsPage(BasePage):
         if not self.is_cart_page():
             raise ItemNotAddedError(f"No 'Added to cart' confirmation (now at {self.page.url})")
 
+    # Open item and add it to cart
     @allure.step("הוספת {label} לסל: {url}")
     def add_to_cart(self, url: str, label: str) -> bool:
         step = "navigate"

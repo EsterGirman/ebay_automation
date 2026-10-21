@@ -4,6 +4,7 @@ import pytest
 from utils.config import Credentials, Scenario, load_scenarios
 
 
+# Full E2E purchase flow
 @pytest.mark.e2e
 @allure.feature("eBay E2E Purchase Flow")
 @allure.story("Search under price, add to cart, verify cart total within budget")

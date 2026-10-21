@@ -15,6 +15,7 @@ _HEAVY_MEDIA = re.compile(r"\.(png|jpe?g|gif|webp|avif|mp4|webm)(\?|$)", re.IGNO
 _AUTH_MARKERS = ("captcha", "signin.ebay.com", "accounts.ebay.com")  # CAPTCHA needs images
 
 
+# Report paths from project root
 @pytest.hookimpl(tryfirst=True)
 def pytest_configure(config):
     for option in ("allure_report_dir", "output", "xmlpath"):
@@ -23,6 +24,7 @@ def pytest_configure(config):
             setattr(config.option, option, str(config.rootpath / value))
 
 
+# Allure environment details
 def pytest_sessionfinish(session):
     results_dir = getattr(session.config.option, "allure_report_dir", None)
     if not results_dir or not Path(results_dir).is_dir():
@@ -38,6 +40,7 @@ def pytest_sessionfinish(session):
         "\n".join(f"{k}={v}" for k, v in props.items()), encoding="utf-8")
 
 
+# Keep test result for fixtures
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_makereport(item, call):
     outcome = yield
@@ -45,11 +48,13 @@ def pytest_runtest_makereport(item, call):
     setattr(item, f"rep_{report.when}", report)
 
 
+# Run profile
 @pytest.fixture(scope="session")
 def profile() -> Profile:
     return load_profile()
 
 
+# Chrome launch flags
 @pytest.fixture(scope="session")
 def browser_type_launch_args(browser_type_launch_args, profile: Profile):
     return {
@@ -60,6 +65,7 @@ def browser_type_launch_args(browser_type_launch_args, profile: Profile):
     }
 
 
+# Context settings + saved auth
 @pytest.fixture(scope="session")
 def browser_context_args(browser_context_args):
     args = {**browser_context_args, "locale": "en-US", "no_viewport": True}
@@ -68,6 +74,7 @@ def browser_context_args(browser_context_args):
     return args
 
 
+# Timeouts, popups, image blocking
 @pytest.fixture
 def context(context: BrowserContext, profile: Profile) -> BrowserContext:
     context.set_default_timeout(profile.default_timeout_ms)
@@ -77,6 +84,7 @@ def context(context: BrowserContext, profile: Profile) -> BrowserContext:
     return context
 
 
+# Block images, except sign-in/CAPTCHA
 def _block_media_except_auth(route) -> None:
     try:
         frame_url = route.request.frame.url
@@ -89,6 +97,7 @@ def _block_media_except_auth(route) -> None:
         route.abort()
 
 
+# Screenshot + URL on failure
 def _attach_failure_artifacts(request, page: Page) -> None:
     report = getattr(request.node, "rep_call", None)
     if (report is None or not report.failed or page.is_closed()
@@ -103,12 +112,14 @@ def _attach_failure_artifacts(request, page: Page) -> None:
         pass
 
 
+# Clear old screenshots
 @pytest.fixture(scope="session")
 def fresh_screenshots_dir() -> None:
     for png in SCREENSHOTS_DIR.glob("*.png"):
         png.unlink(missing_ok=True)
 
 
+# Workflow service + cart cleanup
 @pytest.fixture
 def ebay(page: Page, scenario: Scenario, request,
          fresh_screenshots_dir) -> Iterator[EBayWorkflowService]:
@@ -123,6 +134,7 @@ def ebay(page: Page, scenario: Scenario, request,
         logging.getLogger("teardown").warning(f"Cart cleanup failed: {e}")
 
 
+# Page + failure screenshot
 @pytest.fixture
 def page(page: Page, request) -> Iterator[Page]:
     yield page

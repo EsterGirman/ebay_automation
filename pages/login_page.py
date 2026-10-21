@@ -18,16 +18,19 @@ class LoginPage(BasePage):
     SUBMIT_BUTTON = "//button[@id='sgnBt']"
     RETRY_SEC = 15
 
+    # Credentials and manual wait time
     def __init__(self, page: Page, credentials: Optional[Credentials] = None):
         super().__init__(page)
         self.credentials = credentials or Credentials.from_env()
         self.manual_wait_ms = load_profile().login_wait_sec * 1000
 
+    # Check sign-in on My eBay
     @allure.step("בדיקה האם המשתמש מחובר")
     def is_signed_in(self) -> bool:
         self.navigate(self.PROTECTED_URL)
         return not (self.is_signin_page() or self.is_verification_page())
 
+    # Sign in and save auth state
     @allure.step("הזדהות למערכת")
     def login(self) -> None:
         if self.is_signed_in():
@@ -40,6 +43,7 @@ class LoginPage(BasePage):
         self._save_auth_state()
         self.logger.info("Signed in (verified on My eBay)")
 
+    # Finish sign-in / CAPTCHA / code
     @allure.step("השלמת התחברות")
     def complete_sign_in_if_prompted(self) -> None:
         if not (self.is_signin_page() or self.is_verification_page()):
@@ -71,6 +75,7 @@ class LoginPage(BasePage):
         self._save_auth_state()
         self.logger.info(f"Sign-in completed | url={self.page.url}")
 
+    # One sign-in action per screen
     def _sign_in_step(self, second: int, last_action: dict) -> None:
         if self.page.locator(self.PASSWORD_INPUT).is_visible():
             step, field, value, button = ("password", self.PASSWORD_INPUT,
@@ -88,6 +93,7 @@ class LoginPage(BasePage):
         self._submit_field(field, value, button, retry)
         last_action[step] = second
 
+    # Type value and submit
     def _submit_field(self, field: str, value: str, button: str, retry: bool) -> None:
         locator = self.page.locator(field)
         if retry:
@@ -107,11 +113,13 @@ class LoginPage(BasePage):
         else:
             self.page.locator(button).click()
 
+    # On CAPTCHA / verification page?
     def is_verification_page(self) -> bool:
         url = self.page.url
         return ("/splashui/captcha" in url or "/stepup" in url
                 or urlparse(url).netloc.startswith("accounts."))
 
+    # Save cookies for next runs
     def _save_auth_state(self) -> None:
         AUTH_STATE_FILE.parent.mkdir(exist_ok=True)
         self.page.context.storage_state(path=str(AUTH_STATE_FILE))

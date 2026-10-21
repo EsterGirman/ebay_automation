@@ -30,10 +30,12 @@ class SearchResultsPage(BasePage):
         return {href: a ? a.href : '', price: p ? p.innerText : '', text: li.innerText || ''};
     })"""
 
+    # Init per-page stats
     def __init__(self, page: Page):
         super().__init__(page)
         self.last_stats: Dict = {}
 
+    # Search and apply price filter
     @allure.step("חיפוש: {query} עד מחיר {max_price}")
     def search(self, query: str, max_price: float) -> None:
         url = self.SEARCH_URL.format(query=quote_plus(query))
@@ -42,10 +44,12 @@ class SearchResultsPage(BasePage):
             self.logger.warning("Price filter UI not available - applying it via URL (_udhi)")
             self.navigate(f"{url}&_udhi={self._format_price(max_price)}")  # fallback: same filter via URL
 
+    # 220.0 -> '220'
     @staticmethod
     def _format_price(price: float) -> str:
         return str(int(price)) if float(price).is_integer() else str(price)
 
+    # Use the on-page price filter
     def _apply_price_filter_ui(self, max_price: float, attempts: int = 2) -> bool:
         for attempt in range(1, attempts + 1):
             if not self.is_visible_within(self.MAX_PRICE_INPUT, timeout=15000):
@@ -62,6 +66,7 @@ class SearchResultsPage(BasePage):
                 self.logger.warning(f"Price filter UI did not respond: {str(e).splitlines()[0]}")
         return False
 
+    # Type max price until accepted
     def _type_max_price(self, max_price: float) -> bool:
         max_input = self.page.locator(self.MAX_PRICE_INPUT).first
         submit = self.page.locator(self.PRICE_SUBMIT).first
@@ -75,6 +80,7 @@ class SearchResultsPage(BasePage):
                 return True
         return False
 
+    # Wait for filter in URL
     def _wait_for_filter_applied(self, timeout_ms: int) -> bool:
         for _ in range(timeout_ms // 500):
             if re.search(r"[?&]_udhi=", self.page.url):
@@ -85,6 +91,7 @@ class SearchResultsPage(BasePage):
             self.page.wait_for_timeout(500)
         return False
 
+    # Wait for button to enable
     def _wait_until_enabled(self, button, timeout_ms: int) -> bool:
         try:
             self.page.wait_for_function("b => !b.disabled", arg=button.element_handle(),
@@ -93,14 +100,17 @@ class SearchResultsPage(BasePage):
         except PlaywrightTimeout:
             return False
 
+    # Read all cards via XPath
     def _extract(self) -> List[Dict]:
         args = {"link": self.ITEM_LINK, "price": self.ITEM_PRICE}
         return self.page.locator(self.ITEM_CONTAINER).evaluate_all(self.JS_EXTRACT, args)
 
+    # Count real product cards
     @staticmethod
     def _real_cards(cards: List[Dict]) -> int:
         return sum(1 for c in cards if c.get("href") and FAKE_ITEM_MARKER not in c["href"])
 
+    # Read cards, reload if partial
     def _read_cards(self, min_cards: int = 5, max_reloads: int = 2) -> List[Dict]:
         cards: List[Dict] = []
         for attempt in range(max_reloads + 1):
@@ -131,6 +141,7 @@ class SearchResultsPage(BasePage):
                     self.logger.warning("Reload exceeded timeout, continuing")
         return cards
 
+    # Item URLs under max price
     @allure.step("איסוף פריטים עד מחיר {max_price} (עד {limit})")
     def get_items_under_price(self, max_price: float, limit: int, currency: str,
                               already: List[str] = ()) -> List[str]:
@@ -146,6 +157,7 @@ class SearchResultsPage(BasePage):
         self.take_screenshot("search_results" if cards else "search_no_results")
         return urls
 
+    # Save page HTML for debugging
     def _save_page_html(self, name: str) -> None:
         try:
             REPORTS_DIR.mkdir(exist_ok=True)
@@ -155,6 +167,7 @@ class SearchResultsPage(BasePage):
         except Exception as e:
             self.logger.warning(f"Could not save page HTML: {e}")
 
+    # Go to next results page
     @allure.step("מעבר לעמוד הבא")
     def go_to_next_page(self) -> bool:
         next_btn = self.page.locator(self.NEXT_PAGE)

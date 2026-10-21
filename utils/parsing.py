@@ -20,10 +20,12 @@ class Money(NamedTuple):
     currency: str
 
 
+# Currency symbol -> ISO code
 def _currency_code(symbol: str) -> str:
     return _CURRENCY_CODES[re.sub(r"\s+", " ", symbol.upper().replace("US$", "US $"))]
 
 
+# Price text -> amount + currency
 def parse_money(text: Optional[str]) -> Optional[Money]:
     if not text:
         return None
@@ -35,11 +37,13 @@ def parse_money(text: Optional[str]) -> Optional[Money]:
     return Money(amount, _currency_code(cur))
 
 
+# Price text -> amount
 def parse_price(text: Optional[str]) -> Optional[float]:
     money = parse_money(text)
     return money.amount if money else None
 
 
+# Cart totals from page text
 def parse_cart_summary(text: str) -> Dict[str, Money]:
     start = text.lower().find("order summary")
     text = text[start:] if start >= 0 else text
@@ -54,17 +58,20 @@ def parse_cart_summary(text: str) -> Dict[str, Money]:
     return summary
 
 
+# Item count from 'Items (n)'
 def parse_cart_item_count(text: str) -> Optional[int]:
     start = text.lower().find("order summary")
     m = re.search(r"Items\s*\((\d+)\)", text[start:] if start >= 0 else text, re.IGNORECASE)
     return int(m.group(1)) if m else None
 
 
+# Item ID from URL
 def item_id(url: str) -> Optional[str]:
     m = re.search(r"/itm/(?:[^/?#]+/)?(\d{9,})", url or "")
     return m.group(1) if m else None
 
 
+# Cards -> URLs within budget
 def filter_cards(cards: List[Dict], max_price: float, limit: int, currency: str = "USD",
                  already: Iterable[str] = ()) -> Tuple[List[str], Dict]:
     seen = set(already)

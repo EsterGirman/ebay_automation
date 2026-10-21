@@ -18,6 +18,7 @@ logger = logging.getLogger("EBayWorkflowService")
 
 
 class EBayWorkflowService:
+    # Pages used by the flow
     def __init__(self, page: Page, currency: str = "USD"):
         self.page = page
         self.currency = currency
@@ -26,6 +27,7 @@ class EBayWorkflowService:
         self.search_report: List[dict] = []
         self.spare_urls: List[str] = []
 
+    # 1. Sign in or continue as guest
     @allure.step("הזדהות")
     def authenticate(self, credentials: Optional[Credentials]) -> bool:
         HomePage(self.page).open()
@@ -44,6 +46,7 @@ class EBayWorkflowService:
         allure.dynamic.label("auth", "signed-in")
         return True
 
+    # Reset session, continue as guest
     def _fall_back_to_guest(self, reason: str) -> None:
         logger.warning(f"Sign-in not completed - continuing as guest ({reason})")
         allure.dynamic.label("auth", "guest (sign-in fallback)")
@@ -52,10 +55,12 @@ class EBayWorkflowService:
         AUTH_STATE_FILE.unlink(missing_ok=True)
         HomePage(self.page).open()
 
+    # Empty the cart
     @allure.step("ריקון הסל")
     def clear_cart(self) -> None:
         self.cart_page.clear()
 
+    # 2. Search under price, with paging
     @allure.step("חיפוש '{query}' עד {max_price} (עד {limit} פריטים)")
     def search_items_by_name_under_price(self, query: str, max_price: float, limit: int = 5,
                                          max_pages: int = 5) -> List[str]:
@@ -75,6 +80,7 @@ class EBayWorkflowService:
                       name="search_report", attachment_type=allure.attachment_type.JSON)
         return result
 
+    # 3. Add items, replace failed ones
     @allure.step("הוספת פריטים לסל")
     def add_items_to_cart(self, urls: List[str], spare_urls: Sequence[str] = ()) -> List[str]:
         target = len(urls)
@@ -97,10 +103,12 @@ class EBayWorkflowService:
         logger.info(f"Added {len(added)}/{target} items to cart")
         return added
 
+    # Assert items are in the cart
     @allure.step("אימות שהפריטים נמצאים בסל")
     def assert_items_in_cart(self, urls: List[str]) -> None:
         self.cart_page.assert_contains_items(urls)
 
+    # 4. Assert cart total within budget
     @allure.step("אימות סכום הסל")
     def assert_cart_total_not_exceeds(self, budget_per_item: float, items_count: int) -> None:
         self.cart_page.assert_total_not_exceeds(budget_per_item, items_count, self.currency)

@@ -19,6 +19,7 @@ class CartPage(BasePage):
     ANY_ITEM_LINK = "//a[contains(@href, '/itm/')]"
     EMPTY_CART_MESSAGE = "//*[contains(text(), \"You don't have any items in your cart\")]"
 
+    # Open the cart page
     @allure.step("פתיחת סל הקניות")
     def open(self, refresh: bool = True) -> None:
         if not refresh and self.is_cart_page():
@@ -35,6 +36,7 @@ class CartPage(BasePage):
             self.take_screenshot("account_info_required")
             raise AccountInfoRequiredError(AccountInfoRequiredError.MESSAGE)
 
+    # Remove all cart items
     @allure.step("ריקון הסל לפני התרחיש")
     def clear(self, max_items: int = 30) -> int:
         self.open()
@@ -56,12 +58,14 @@ class CartPage(BasePage):
         self.logger.info(f"Cart cleared ({removed} items removed)")
         return removed
 
+    # Wait for cart content
     def _wait_until_loaded(self) -> None:
         try:
             self.wait_for_element_visible(f"{self.ORDER_SUMMARY} | {self.EMPTY_CART_MESSAGE}")
         except PlaywrightTimeout:
             self.logger.warning("Cart content did not finish loading")
 
+    # Read order summary totals
     def _read_summary(self) -> Dict[str, Money]:
         try:
             self.wait_for_element_visible(self.ORDER_SUMMARY, 20000)
@@ -72,6 +76,7 @@ class CartPage(BasePage):
             raise AssertionError("Could not read cart totals (empty cart or changed layout).")
         return summary
 
+    # Item IDs in the cart
     def get_item_ids(self) -> Set[str]:
         links = self.page.locator(self.CART_ITEM_LINK)
         if not links.count():
@@ -80,6 +85,7 @@ class CartPage(BasePage):
         hrefs = links.evaluate_all("els => els.map(a => a.href)")
         return {i for i in map(item_id, hrefs) if i}
 
+    # Assert added items are in cart
     @allure.step("אימות שכל הפריטים שנוספו נמצאים בסל")
     def assert_contains_items(self, urls: List[str]) -> None:
         self.open()
@@ -96,6 +102,7 @@ class CartPage(BasePage):
         assert count == len(urls), f"Cart shows {count} items, expected {len(urls)}"
         self.logger.info(f"All {len(urls)} added items are in the cart")
 
+    # Open cart, read totals, screenshot
     @allure.step("שליפת סכומי הסל")
     def get_summary(self) -> Dict[str, Money]:
         self.open(refresh=False)
@@ -105,6 +112,7 @@ class CartPage(BasePage):
             f"{k}={v.amount} {v.currency}" for k, v in summary.items()))
         return summary
 
+    # Assert items total within budget
     @allure.step("אימות שמחיר הפריטים בסל ≤ {budget_per_item} × {items_count}")
     def assert_total_not_exceeds(self, budget_per_item: float, items_count: int,
                                  currency: str = "USD") -> None:

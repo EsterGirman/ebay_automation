@@ -15,6 +15,7 @@ class CartPage(BasePage):
     REMOVE_BUTTON = ("//button[@data-test-id='cart-remove-item'] | "
                      "//button[normalize-space()='Remove']")
     CART_ITEM_LINK = "//a[contains(@href, '/itm/')]"
+    EMPTY_CART_MESSAGE = "//*[contains(text(), \"You don't have any items in your cart\")]"
 
     @allure.step("פתיחת סל הקניות")
     def open(self, refresh: bool = True) -> None:
@@ -34,9 +35,10 @@ class CartPage(BasePage):
     def clear(self, max_items: int = 30) -> int:
         """פריטים מהרצות קודמות מנפחים את הסכום ומפילים את האימות - מתחילים מסל ריק."""
         self.open()
+        self._wait_until_loaded()
         removed = 0
         buttons = self.page.locator(self.REMOVE_BUTTON)
-        while removed < max_items and self.is_visible_within(self.REMOVE_BUTTON, timeout=5000):
+        while removed < max_items and self.is_visible_within(self.REMOVE_BUTTON, timeout=15000):
             before = buttons.count()
             buttons.first.click()
             try:
@@ -50,6 +52,14 @@ class CartPage(BasePage):
             removed += 1
         self.logger.info(f"Cart cleared ({removed} items removed)")
         return removed
+
+    def _wait_until_loaded(self) -> None:
+        """הפריטים בסל מוצגים אחרי טעינת העמוד. בלי ההמתנה הזו, ברשת איטית סל מלא נראה ריק
+        (לא נמצא כפתור Remove) - והניקוי מדלג על כל הפריטים."""
+        try:
+            self.wait_for_element_visible(f"{self.ORDER_SUMMARY} | {self.EMPTY_CART_MESSAGE}")
+        except PlaywrightTimeout:
+            self.logger.warning("Cart content did not finish loading")
 
     def _read_summary(self) -> Dict[str, Money]:
         try:

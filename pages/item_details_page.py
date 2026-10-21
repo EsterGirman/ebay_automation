@@ -23,6 +23,9 @@ class ItemDetailsPage(BasePage):
         "//*[self::a or self::button][.//span[normalize-space()='Add to cart']] | "
         "//*[self::a or self::button][normalize-space()='Add to cart']"
     )
+    # טופס "Complete your account info" שמופיע לחשבון רשום בלי כתובת
+    ACCOUNT_INFO_FORM = ("//*[self::h1 or self::h2]"
+                         "[contains(normalize-space(), 'Complete your account info')]")
     ADDED_CONFIRMATION = (
         "//*[contains(normalize-space(text()), 'Added to cart')] | "
         "//a[contains(@href, 'cart.ebay.com')][contains(., 'See in cart') "
@@ -90,6 +93,12 @@ class ItemDetailsPage(BasePage):
             pass
         # eBay דורשת לפעמים סיסמה מחדש בלחיצה על 'Add to cart' ואחרי ההתחברות מעבירה לסל
         LoginPage(self.page).complete_sign_in_if_prompted()
+        if self.page.locator(self.ACCOUNT_INFO_FORM).first.is_visible():
+            # בעיה של החשבון ולא של הפריט: כל פריט יקבל את אותו טופס, אין טעם להמשיך לנסות
+            self.take_screenshot("account_info_required")
+            raise SignInRequiredError(
+                "eBay asks to complete the account's contact info (address) before adding to "
+                "cart. Complete it once in a regular browser, or run as guest (no EBAY_USER).")
         if not self.is_cart_page():
             raise ItemNotAddedError(f"No 'Added to cart' confirmation (now at {self.page.url})")
 

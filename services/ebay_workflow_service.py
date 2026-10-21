@@ -18,7 +18,7 @@ logger = logging.getLogger("EBayWorkflowService")
 
 
 class EBayWorkflowService:
-    """ארבע הפונקציות של התרגיל, מעל ה-Page Objects. הטסט מדבר רק עם השכבה הזו."""
+    """The four functions of the assignment, on top of the Page Objects. The test talks only to this layer."""
 
     def __init__(self, page: Page, currency: str = "USD"):
         self.page = page
@@ -26,15 +26,15 @@ class EBayWorkflowService:
         self.search_page = SearchResultsPage(page)
         self.cart_page = CartPage(page)
         self.search_report: List[dict] = []
-        self.spare_urls: List[str] = []          # מועמדים נוספים מהחיפוש, להחלפת פריט שנכשל
+        self.spare_urls: List[str] = []          # extra candidates from the search, to replace an item that fails
 
-    # 1. הזדהות
+    # 1. Authentication
     @allure.step("הזדהות")
     def authenticate(self, credentials: Optional[Credentials]) -> bool:
-        """עם EBAY_USER/EBAY_PASS - מתחבר (או משתמש במצב ההתחברות השמור). בלעדיהם - אורח.
-        אם ההתחברות לא הושלמה בזמן (CAPTCHA / קוד אימות שלא הוזנו תוך EBAY_LOGIN_WAIT_SEC) -
-        ממשיכים כאורח עם אזהרה בלוג ובדוח, כי eBay מאפשרת סל לאורחים ושאר התרחיש לא תלוי בחשבון.
-        EBAY_REQUIRE_LOGIN=1 הופך את זה לכישלון."""
+        """With EBAY_USER/EBAY_PASS - sign in (or reuse the saved auth state). Without them - guest.
+        If sign-in isn't completed in time (CAPTCHA / verification code not entered within
+        EBAY_LOGIN_WAIT_SEC), continue as guest with a warning in the log and report: eBay allows a guest cart.
+        EBAY_REQUIRE_LOGIN=1 turns this into a failure."""
         HomePage(self.page).open()
         if credentials is None:
             logger.info("No EBAY_USER/EBAY_PASS - running as guest")
@@ -42,8 +42,8 @@ class EBayWorkflowService:
             return False
         try:
             LoginPage(self.page, credentials).login()
-            # חשבון בלי כתובת מועבר מהסל לטופס 'Complete your account info'; בודקים כבר עכשיו,
-            # כדי לעבור לאורח לפני שמתחילים, ולא להיכשל בסוף התרחיש
+            # An account without an address is redirected from the cart to 'Complete your account info';
+            # check now, to switch to guest before starting rather than fail at the end
             self.cart_page.open()
         except SignInRequiredError as e:
             if env_flag("EBAY_REQUIRE_LOGIN", False):
@@ -54,29 +54,29 @@ class EBayWorkflowService:
         return True
 
     def _fall_back_to_guest(self, reason: str) -> None:
-        """ממשיך כאורח: מנקה את הסשן החלקי (עוגיות ו-.auth), רושם אזהרה ומסמן בדוח שבוצע fallback."""
+        """Continue as guest: clear the partial session (cookies and .auth), log a warning, mark the fallback in the report."""
         logger.warning(f"Sign-in not completed - continuing as guest ({reason})")
         allure.dynamic.label("auth", "guest (sign-in fallback)")
         allure.attach(reason, name="sign_in_fallback", attachment_type=allure.attachment_type.TEXT)
-        # סשן חצי-מחובר היה גורם ל-eBay לבקש סיסמה שוב בסל; מתחילים כאורח נקי
+        # A half-signed-in session made eBay ask for the password again in the cart; start as a clean guest
         self.page.context.clear_cookies()
         AUTH_STATE_FILE.unlink(missing_ok=True)
         HomePage(self.page).open()
 
     @allure.step("ריקון הסל")
     def clear_cart(self) -> None:
-        """מרוקן את הסל - בתחילת התרחיש (פריטים ישנים מנפחים את הסכום) ובסופו (ה-fixture ebay)."""
+        """Empty the cart - at the start (leftovers inflate the total) and at the end (the ebay fixture)."""
         self.cart_page.clear()
 
-    # 2. חיפוש עם תנאי מחיר (כולל Paging). מחזיר עד limit כתובות; פחות (גם 0) זה תקין.
+    # 2. Search with a price condition (incl. paging). Returns up to limit URLs; fewer (even 0) is valid.
     @allure.step("חיפוש '{query}' עד {max_price} (עד {limit} פריטים)")
     def search_items_by_name_under_price(self, query: str, max_price: float, limit: int = 5,
                                          max_pages: int = 5) -> List[str]:
-        """פונקציית החיפוש מהתרגיל (4.1): חיפוש לפי query, פילטר מחיר, ואיסוף עד limit פריטים עם
-        Paging. מחזיר את מה שנמצא - גם פחות מ-limit וגם 0. מועמדים נוספים נשמרים ב-spare_urls."""
-        self.search_report = []                 # אבחון לכל עמוד שנסרק, מצורף לדוח
+        """The search function of the assignment (4.1): search by query, price filter, collect up to limit
+        items with paging. Returns what was found - fewer than limit or 0 is valid. Extra candidates go to spare_urls."""
+        self.search_report = []                 # per-page diagnostics, attached to the report
         self.search_page.search(query, max_price)
-        # אוספים עד limit רזרבות מאותם עמודים; מדפדפים רק כל עוד חסרים פריטים לתוצאה עצמה
+        # Collect up to limit spares from the same pages; page further only while the result itself is short
         wanted = limit * 2
         collected: List[str] = []
         for page_no in range(1, max_pages + 1):
@@ -87,16 +87,16 @@ class EBayWorkflowService:
                 break
         result, self.spare_urls = collected[:limit], collected[limit:]
         logger.info(f"Total collected: {len(result)}/{limit} (+{len(self.spare_urls)} spare)")
-        # אבחון לכל עמוד שנסרק (כמה כרטיסים, כמה סוננו ולמה) - מאפשר להבין מהדוח חיפוש ריק
+        # Per-page diagnostics (cards, how many filtered and why) - explains an empty search from the report
         allure.attach(json.dumps(self.search_report, ensure_ascii=False, indent=2),
                       name="search_report", attachment_type=allure.attachment_type.JSON)
         return result
 
-    # 3. הוספה לסל - כל פריט בלשונית משלו; אחרי כל פריט חוזרים ללשונית החיפוש
+    # 3. Add to cart - each item in its own tab; return to the search tab after each item
     @allure.step("הוספת פריטים לסל")
     def add_items_to_cart(self, urls: List[str], spare_urls: Sequence[str] = ()) -> List[str]:
-        """מוסיף len(urls) פריטים. פריט שלא ניתן להוסיף (אזל / כפתור לא פעיל) נרשם בלוג ובצילום
-        מסך ומוחלף בפריט הבא מ-spare_urls. מחזיר את הכתובות שנוספו בפועל."""
+        """Add len(urls) items. An item that can't be added (sold out / button disabled) is logged with a
+        screenshot and replaced by the next one from spare_urls. Returns the URLs actually added."""
         target = len(urls)
         added: List[str] = []
         for index, url in enumerate([*urls, *spare_urls], start=1):
@@ -105,7 +105,7 @@ class EBayWorkflowService:
             if index > target:
                 logger.info(f"Replacing a failed item with spare candidate: {url}")
             if index > 1:
-                # קצב "אנושי" בין פריטים - רצף בקשות מהיר הוא הסיבה הנפוצה לזיהוי כבוט
+                # "Human" pace between items - a fast burst of requests is the usual bot-detection trigger
                 self.page.wait_for_timeout(random.randint(2000, 5000))
             item_tab = self.page.context.new_page()
             try:
@@ -120,11 +120,11 @@ class EBayWorkflowService:
 
     @allure.step("אימות שהפריטים נמצאים בסל")
     def assert_items_in_cart(self, urls: List[str]) -> None:
-        """מוודא בסל עצמו שכל הפריטים שנוספו נמצאים בו ושמספר הפריטים תואם (תוספת על דרישות התרגיל)."""
+        """Verify in the cart itself that every added item is there and the item count matches (beyond the assignment)."""
         self.cart_page.assert_contains_items(urls)
 
-    # 4. אימות סכום הסל
+    # 4. Cart total check
     @allure.step("אימות סכום הסל")
     def assert_cart_total_not_exceeds(self, budget_per_item: float, items_count: int) -> None:
-        """פונקציית אימות הסל מהתרגיל (4.3): סכום הפריטים בסל <= budget_per_item * items_count."""
+        """The cart check of the assignment (4.3): items total in the cart <= budget_per_item * items_count."""
         self.cart_page.assert_total_not_exceeds(budget_per_item, items_count, self.currency)

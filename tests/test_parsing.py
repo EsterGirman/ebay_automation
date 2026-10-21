@@ -1,4 +1,4 @@
-"""בדיקות unit ללוגיקת הפענוח והסינון - רצות בשניות ובלי דפדפן."""
+"""Unit tests for the parsing and filtering logic - run in under a second, no browser."""
 import pytest
 
 from utils.parsing import (Money, filter_cards, item_id, parse_cart_item_count, parse_cart_summary,

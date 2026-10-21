@@ -9,7 +9,7 @@ from .login_page import LoginPage
 
 
 class CartPage(BasePage):
-    """סל הקניות: פתיחה, ריקון, קריאת הסכומים (פריטים / משלוח / Subtotal) ואימות התקציב."""
+    """Shopping cart: open, clear, read the totals (items / shipping / subtotal) and check the budget."""
     CART_URL = "https://cart.ebay.com/"
 
     ORDER_SUMMARY = "//*[normalize-space()='Order summary']"
@@ -20,7 +20,7 @@ class CartPage(BasePage):
 
     @allure.step("פתיחת סל הקניות")
     def open(self, refresh: bool = True) -> None:
-        """refresh=False: אם כבר בעמוד הסל (למשל אחרי אימות הפריטים) - לא טוענים שוב."""
+        """refresh=False: if already on the cart page (e.g. after checking items), don't reload."""
         if not refresh and self.is_cart_page():
             return
         self.navigate(self.CART_URL, wait_until="commit", timeout=45000)
@@ -29,7 +29,7 @@ class CartPage(BasePage):
         except PlaywrightTimeout:
             self.logger.warning("Cart page is slow to load, continuing")
         LoginPage(self.page).complete_sign_in_if_prompted()
-        if not self.is_cart_page():                 # אחרי התחברות eBay לא תמיד חוזרת לסל
+        if not self.is_cart_page():                 # after sign-in eBay doesn't always return to the cart
             self.navigate(self.CART_URL)
         if self.is_account_upgrade_page():
             self.take_screenshot("account_info_required")
@@ -37,7 +37,7 @@ class CartPage(BasePage):
 
     @allure.step("ריקון הסל לפני התרחיש")
     def clear(self, max_items: int = 30) -> int:
-        """פריטים מהרצות קודמות מנפחים את הסכום ומפילים את האימות - מתחילים מסל ריק."""
+        """Leftovers from earlier runs inflate the total and break the check - start from an empty cart."""
         self.open()
         self._wait_until_loaded()
         removed = 0
@@ -58,8 +58,8 @@ class CartPage(BasePage):
         return removed
 
     def _wait_until_loaded(self) -> None:
-        """הפריטים בסל מוצגים אחרי טעינת העמוד. בלי ההמתנה הזו, ברשת איטית סל מלא נראה ריק
-        (לא נמצא כפתור Remove) - והניקוי מדלג על כל הפריטים."""
+        """Cart items render after the page loads. Without this wait a full cart looks empty on a slow
+        network (no Remove button found) and clearing skips every item."""
         try:
             self.wait_for_element_visible(f"{self.ORDER_SUMMARY} | {self.EMPTY_CART_MESSAGE}")
         except PlaywrightTimeout:
@@ -76,16 +76,16 @@ class CartPage(BasePage):
         return summary
 
     def get_item_ids(self) -> Set[str]:
-        """מזהי הפריטים (המספר שב-/itm/<id>) מכל הקישורים בעמוד הסל."""
+        """Item IDs (the number in /itm/<id>) from all links on the cart page."""
         hrefs = self.page.locator(self.CART_ITEM_LINK).evaluate_all("els => els.map(a => a.href)")
         return {i for i in map(item_id, hrefs) if i}
 
     @allure.step("אימות שכל הפריטים שנוספו נמצאים בסל")
     def assert_contains_items(self, urls: List[str]) -> None:
-        """אישור 'Added to cart' בדף הפריט לא מספיק: בודקים בסל עצמו את מספר הפריטים ואת מזהי
-        הפריטים, כדי לתפוס הוספה שלא נשמרה (סשן שהתחלף, פריט שהוסר, הוספה כפולה)."""
+        """The 'Added to cart' confirmation on the item page is not enough: check the cart itself (item
+        count and IDs) to catch an add that wasn't kept (session changed, item removed, duplicate add)."""
         self.open()
-        self._read_summary()                         # ממתין שהסל ייטען
+        self._read_summary()                         # waits for the cart to load
         expected = {item_id(u) for u in urls}
         in_cart = self.get_item_ids()
         count = parse_cart_item_count(self.page.inner_text("body"))
@@ -100,7 +100,7 @@ class CartPage(BasePage):
 
     @allure.step("שליפת סכומי הסל")
     def get_summary(self) -> Dict[str, Money]:
-        """פותח את הסל (אם צריך), קורא את סיכום ההזמנה ושומר צילום מסך של עמוד הסל."""
+        """Open the cart (if needed), read the order summary and save a screenshot of the cart page."""
         self.open(refresh=False)
         summary = self._read_summary()
         self.take_screenshot("cart_page")
@@ -111,8 +111,8 @@ class CartPage(BasePage):
     @allure.step("אימות שמחיר הפריטים בסל ≤ {budget_per_item} × {items_count}")
     def assert_total_not_exceeds(self, budget_per_item: float, items_count: int,
                                  currency: str = "USD") -> None:
-        """משווים את מחיר הפריטים (Items) ולא את Subtotal שכולל משלוח: הסינון בחיפוש הוא לפי
-        מחיר הפריט, ובדיקה כולל משלוח הייתה נכשלת גם כשכל פריט עומד בתנאי."""
+        """Compare the items total, not Subtotal (which includes shipping): the search filters by item
+        price, so a check that includes shipping could fail even when every item meets the limit."""
         threshold = budget_per_item * items_count
         summary = self.get_summary()
         items_total = summary.get("items") or summary["subtotal"]

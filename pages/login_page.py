@@ -9,38 +9,38 @@ from .base_page import BasePage, SignInRequiredError
 
 
 class LoginPage(BasePage):
-    """התחברות ל-eBay: מילוי הטופס, המתנה ל-CAPTCHA / קוד אימות, אימות ההצלחה ושמירת המצב."""
+    """eBay sign-in: fill the form, wait for CAPTCHA / verification code, verify success, save the state."""
     SIGNIN_URL = "https://signin.ebay.com/"
-    # עמוד שדורש התחברות מלאה. "Hi <name>" בכותרת לא מספיק: eBay מזהה סשן ישן
-    # ובכל זאת דורשת סיסמה לפני פעולות סל
+    # A page that requires full sign-in. "Hi <name>" in the header is not enough: eBay recognizes an old
+    # session but still asks for the password before cart actions
     PROTECTED_URL = "https://www.ebay.com/mye/myebay/summary"
 
     USERNAME_INPUT = "//input[@id='userid']"
     CONTINUE_BUTTON = "//button[@id='signin-continue-btn']"
     PASSWORD_INPUT = "//input[@id='pass']"
     SUBMIT_BUTTON = "//button[@id='sgnBt']"
-    RETRY_SEC = 15          # אחרי כמה שניות בלי תגובה חוזרים על לחיצה שלא נקלטה
+    RETRY_SEC = 15          # seconds without a response before repeating a click that didn't register
 
     def __init__(self, page: Page, credentials: Optional[Credentials] = None):
         super().__init__(page)
         self.credentials = credentials or Credentials.from_env()
-        # זמן להשלמה ידנית בחלון (CAPTCHA / קוד אימות) - eBay לא מאפשרת לעקוף אותם וגם לא צריך
+        # Time to finish CAPTCHA / verification by hand in the window - they are not bypassed
         self.manual_wait_ms = load_profile().login_wait_sec * 1000
 
     @allure.step("בדיקה האם המשתמש מחובר")
     def is_signed_in(self) -> bool:
-        """נכנס לעמוד שדורש התחברות מלאה (My eBay). אם eBay מעבירה למסך כניסה או אימות - לא מחובר."""
+        """Open a page that needs full sign-in (My eBay). If eBay redirects to sign-in or verification - not signed in."""
         self.navigate(self.PROTECTED_URL)
         return not (self.is_signin_page() or self.is_verification_page())
 
     @allure.step("הזדהות למערכת")
     def login(self) -> None:
-        """מתחבר אם צריך ושומר את מצב ההתחברות לקובץ, כדי שההרצות הבאות ידלגו על מסך ההתחברות."""
+        """Sign in if needed and save the auth state, so later runs skip the sign-in screen."""
         if self.is_signed_in():
             self.logger.info("Already signed in (saved auth state)")
             return
         self.complete_sign_in_if_prompted()
-        # אימות סופי מול עמוד שדורש התחברות מלאה, ורק אז שומרים את המצב לקובץ
+        # Final check against a page that requires full sign-in; only then save the state
         if not self.is_signed_in():
             self.take_screenshot("signin_not_verified")
             raise SignInRequiredError("Sign-in looked complete but My eBay still asks to sign in.")
@@ -49,13 +49,13 @@ class LoginPage(BasePage):
 
     @allure.step("השלמת התחברות")
     def complete_sign_in_if_prompted(self) -> None:
-        """מכונת מצבים פשוטה: בכל שנייה בודקים איזה מסך מוצג ופועלים בהתאם, עד שיוצאים מתהליך
-        ההתחברות או שנגמר הזמן (EBAY_LOGIN_WAIT_SEC). מטפל ב:
-        - טופס מלא (שם משתמש -> Continue -> סיסמה) וב-'Welcome back' (סיסמה בלבד);
-        - לחיצה שלא נקלטה (העמוד נטען לאט והכפתור עוד לא פעיל) - חוזרים עליה אחרי RETRY_SEC;
-        - CAPTCHA ואימות זהות (קוד למייל/SMS) - לא נעקפים: ממתינים להשלמה ידנית בחלון."""
-        # גם CAPTCHA/אימות שקופצים באמצע התהליך (למשל אחרי 'Add to cart') - ממתינים להם ולא
-        # סוגרים את הלשונית מתחת לידיים של מי שפותר אותם
+        """Simple state machine: every second, check which screen is shown and act, until sign-in
+        is done or time runs out (EBAY_LOGIN_WAIT_SEC). Handles:
+        - the full form (username -> Continue -> password) and 'Welcome back' (password only);
+        - a click that didn't register (slow page, button not ready yet) - repeated after RETRY_SEC;
+        - CAPTCHA and identity verification (email/SMS code) - not bypassed: wait for manual completion."""
+        # Also wait for a CAPTCHA/verification that pops up mid-flow (e.g. after 'Add to cart') instead
+        # of closing the tab under the person solving it
         if not (self.is_signin_page() or self.is_verification_page()):
             return
         self.logger.info("Sign-in / verification page shown, completing it")
@@ -86,8 +86,8 @@ class LoginPage(BasePage):
         self.logger.info(f"Sign-in completed | url={self.page.url}")
 
     def _sign_in_step(self, second: int, last_action: dict) -> None:
-        """פעולה אחת לפי המסך: סיסמה אם השדה מוצג, אחרת שם משתמש. לא חוזרים על אותה פעולה
-        לפני RETRY_SEC, כדי לתת לעמוד זמן להגיב."""
+        """One action per screen: password if the field is shown, otherwise username. The same action
+        is not repeated before RETRY_SEC, to give the page time to respond."""
         if self.page.locator(self.PASSWORD_INPUT).is_visible():
             step, field, value, button = ("password", self.PASSWORD_INPUT,
                                           self.credentials.password, self.SUBMIT_BUTTON)
@@ -105,8 +105,8 @@ class LoginPage(BasePage):
         last_action[step] = second
 
     def _submit_field(self, field: str, value: str, button: str, retry: bool) -> None:
-        """ניסיון ראשון: מילוי ולחיצה על הכפתור. ניסיון חוזר: כמו משתמש - הקלדה תו-תו ו-Enter,
-        כי בעמוד שנטען לאט הרכיב של eBay לא תמיד קולט fill ולחיצה (כמו בפילטר המחיר)."""
+        """First try: fill and click the button. Retry: like a user - type key by key and press Enter,
+        because on a slow page eBay's component doesn't always register fill + click (as in the price filter)."""
         locator = self.page.locator(field)
         if not retry:
             locator.fill(value)
@@ -119,7 +119,7 @@ class LoginPage(BasePage):
         locator.press("Enter")
 
     def is_verification_page(self) -> bool:
-        """CAPTCHA או אימות זהות (step-up) - שלב בתוך ההתחברות, לא התחברות שהושלמה."""
+        """CAPTCHA or identity verification (step-up) - a step inside sign-in, not a completed sign-in."""
         url = self.page.url
         return ("/splashui/captcha" in url or "/stepup" in url
                 or urlparse(url).netloc.startswith("accounts."))

@@ -108,15 +108,22 @@ class LoginPage(BasePage):
         """First try: fill and click the button. Retry: like a user - type key by key and press Enter,
         because on a slow page eBay's component doesn't always register fill + click (as in the price filter)."""
         locator = self.page.locator(field)
-        if not retry:
+        if retry:
+            locator.click()
+            locator.press("Control+A")
+            locator.press("Backspace")
+            locator.press_sequentially(value, delay=80)
+        else:
             locator.fill(value)
+        if locator.input_value() != value:
+            locator.fill(value)                  # a key was lost while the page re-rendered
+            if locator.input_value() != value:
+                self.logger.warning("Sign-in field value did not match - not submitting")
+                return
+        if retry:
+            locator.press("Enter")
+        else:
             self.page.locator(button).click()
-            return
-        locator.click()
-        locator.press("Control+A")
-        locator.press("Backspace")
-        locator.press_sequentially(value, delay=80)
-        locator.press("Enter")
 
     def is_verification_page(self) -> bool:
         """CAPTCHA or identity verification (step-up) - a step inside sign-in, not a completed sign-in."""

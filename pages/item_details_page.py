@@ -55,18 +55,34 @@ class ItemDetailsPage(BasePage):
 
         # 2. רשימות נפתחות מותאמות של eBay (button + role=option)
         for button in self.page.locator(self.VARIANT_LISTBOX_BUTTON).all():
-            try:
-                button.click()
-                options = [o for o in self.page.locator(self.LISTBOX_OPTION).all()
-                           if self._is_good_option(o.inner_text())]
-                if options:
-                    random.choice(options).click()
-                    self.logger.info("Selected variant (listbox)")
-                else:
-                    self.page.keyboard.press("Escape")
-            except Exception as e:
-                self.logger.info(f"Listbox variant skipped: {e}")
+            for _ in range(2):                       # ניסיון חוזר אם הבחירה לא נקלטה
+                if self._pick_from_listbox(button):
+                    break
+
+    def _pick_from_listbox(self, button: Locator) -> bool:
+        """פותח רשימה ובוחר ערך אקראי מתוך האפשרויות של **הרשימה הזו בלבד, הגלויות**. בחיפוש כללי
+        נאספו גם אפשרויות מוסתרות של רשימה אחרת (צבע/מידה); לחיצה על אחת כזו המתינה עד timeout
+        והבחירה נשארה "Select"."""
+        try:
+            button.click()
+            listbox_id = button.get_attribute("aria-controls")
+            scope = self.page.locator(f"//*[@id='{listbox_id}']") if listbox_id else self.page
+            options = [o for o in scope.locator("." + self.LISTBOX_OPTION if listbox_id
+                                                else self.LISTBOX_OPTION).all()
+                       if o.is_visible() and self._is_good_option(o.inner_text(timeout=2000))]
+            if not options:
                 self.page.keyboard.press("Escape")
+                return False
+            random.choice(options).click(timeout=5000)
+            chosen = button.inner_text(timeout=2000).strip()
+            if "select" in chosen.lower():           # עדיין "Select" - הבחירה לא נקלטה
+                return False
+            self.logger.info(f"Selected variant (listbox): {chosen}")
+            return True
+        except Exception as e:
+            self.logger.info(f"Listbox variant skipped: {str(e).splitlines()[0]}")
+            self.page.keyboard.press("Escape")
+            return False
 
     @staticmethod
     def _is_disabled(button: Locator) -> bool:

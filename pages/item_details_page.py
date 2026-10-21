@@ -64,20 +64,34 @@ class ItemDetailsPage(BasePage):
         נאספו גם אפשרויות מוסתרות של רשימה אחרת (צבע/מידה); לחיצה על אחת כזו המתינה עד timeout
         והבחירה נשארה "Select"."""
         try:
+            button.scroll_into_view_if_needed()
             button.click()
             listbox_id = button.get_attribute("aria-controls")
-            scope = self.page.locator(f"//*[@id='{listbox_id}']") if listbox_id else self.page
-            options = [o for o in scope.locator("." + self.LISTBOX_OPTION if listbox_id
-                                                else self.LISTBOX_OPTION).all()
+            if listbox_id:
+                listbox = self.page.locator(f"//*[@id='{listbox_id}']")
+                # הרשימה נפתחת באנימציה; בדיקת "גלוי" מיד אחרי הלחיצה מצאה 0 אפשרויות
+                listbox.wait_for(state="visible", timeout=5000)
+                candidates = listbox.locator("xpath=." + self.LISTBOX_OPTION)   # XPath יחסי חייב xpath=
+            else:
+                self.page.wait_for_timeout(1000)
+                candidates = self.page.locator(self.LISTBOX_OPTION)
+            options = [o for o in candidates.all()
                        if o.is_visible() and self._is_good_option(o.inner_text(timeout=2000))]
             if not options:
                 self.page.keyboard.press("Escape")
                 return False
             random.choice(options).click(timeout=5000)
-            chosen = button.inner_text(timeout=2000).strip()
-            if "select" in chosen.lower():           # עדיין "Select" - הבחירה לא נקלטה
-                return False
-            self.logger.info(f"Selected variant (listbox): {chosen}")
+            # ממתינים שהכפתור יציג את הערך שנבחר במקום "Select"
+            selected = button.locator("xpath=.//span[contains(@class, 'btn__text')]")
+            for _ in range(10):
+                text = (selected.first.inner_text(timeout=2000) if selected.count()
+                        else button.inner_text(timeout=2000)).strip()
+                if text and text.lower() != "select":
+                    break
+                self.page.wait_for_timeout(300)
+            else:
+                return False                         # עדיין "Select" - הבחירה לא נקלטה
+            self.logger.info("Selected variant (listbox): " + " ".join(button.inner_text().split()))
             return True
         except Exception as e:
             self.logger.info(f"Listbox variant skipped: {str(e).splitlines()[0]}")

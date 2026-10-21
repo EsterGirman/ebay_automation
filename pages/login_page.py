@@ -52,9 +52,11 @@ class LoginPage(BasePage):
         - טופס מלא (שם משתמש -> Continue -> סיסמה) וב-'Welcome back' (סיסמה בלבד);
         - לחיצה שלא נקלטה (העמוד נטען לאט והכפתור עוד לא פעיל) - חוזרים עליה אחרי RETRY_SEC;
         - CAPTCHA ואימות זהות (קוד למייל/SMS) - לא נעקפים: ממתינים להשלמה ידנית בחלון."""
-        if not self.is_signin_page():
+        # גם CAPTCHA/אימות שקופצים באמצע התהליך (למשל אחרי 'Add to cart') - ממתינים להם ולא
+        # סוגרים את הלשונית מתחת לידיים של מי שפותר אותם
+        if not (self.is_signin_page() or self.is_verification_page()):
             return
-        self.logger.info("Sign-in page shown, completing sign-in")
+        self.logger.info("Sign-in / verification page shown, completing it")
         if not self.credentials:
             self.logger.warning("No EBAY_USER/EBAY_PASS - waiting for manual sign-in in the browser")
         last_action = {"username": -self.RETRY_SEC, "password": -self.RETRY_SEC}

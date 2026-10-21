@@ -27,6 +27,8 @@ class AccountInfoRequiredError(SignInRequiredError):
 
 
 class BasePage:
+    """בסיס לכל ה-Page Objects: ניווט עמיד (ניסיון חוזר, זיהוי חסימה ובדיקת בוטים), המתנות,
+    צילומי מסך וטיפול בחלונות קופצים. כל עמוד יורש מכאן ומוסיף רק את הלוקייטורים והפעולות שלו."""
     # טקסטים שמעידים על עמוד חסימה / שגיאה כללית של eBay
     BLOCK_MARKERS = (
         "something went wrong on our end",
@@ -130,6 +132,7 @@ class BasePage:
             return True                 # העמוד באמצע הפניה (ההקשר הוחלף) - עדיין בתוך הבדיקה
 
     def is_blocked(self) -> bool:
+        """True אם eBay הציגה עמוד חסימה / שגיאה במקום התוכן ('Something went wrong' וכד')."""
         try:
             text = self.page.inner_text("body", timeout=10000).lower()
         except PlaywrightError:
@@ -151,11 +154,13 @@ class BasePage:
         return "/fpa/upgrade" in self.page.url or self._host().startswith("signup.")
 
     def wait_for_element_visible(self, selector: str, timeout: int = None) -> Locator:
+        """ממתין שהאלמנט הראשון שמתאים יוצג ומחזיר אותו. בלי timeout - ברירת המחדל של הפרופיל."""
         locator = self.page.locator(selector).first
         locator.wait_for(state="visible", timeout=timeout)   # None = ברירת המחדל של הפרופיל
         return locator
 
     def is_visible_within(self, selector: str, timeout: int) -> bool:
+        """כמו wait_for_element_visible, אבל מחזיר True/False במקום לזרוק שגיאה."""
         try:
             self.wait_for_element_visible(selector, timeout)
             return True
@@ -164,6 +169,7 @@ class BasePage:
 
     @allure.step("לכידת צילום מסך: {name}")
     def take_screenshot(self, name: str) -> str:
+        """צילום מסך מלא ל-reports/screenshots ולדוח Allure. כישלון בצילום לא מפיל את הטסט."""
         safe_name = re.sub(r"[^\w\-]+", "_", name)
         SCREENSHOTS_DIR.mkdir(parents=True, exist_ok=True)
         path = SCREENSHOTS_DIR / f"{safe_name}.png"

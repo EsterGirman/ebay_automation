@@ -54,6 +54,7 @@ class EBayWorkflowService:
         return True
 
     def _fall_back_to_guest(self, reason: str) -> None:
+        """ממשיך כאורח: מנקה את הסשן החלקי (עוגיות ו-.auth), רושם אזהרה ומסמן בדוח שבוצע fallback."""
         logger.warning(f"Sign-in not completed - continuing as guest ({reason})")
         allure.dynamic.label("auth", "guest (sign-in fallback)")
         allure.attach(reason, name="sign_in_fallback", attachment_type=allure.attachment_type.TEXT)
@@ -64,12 +65,15 @@ class EBayWorkflowService:
 
     @allure.step("ריקון הסל")
     def clear_cart(self) -> None:
+        """מרוקן את הסל - בתחילת התרחיש (פריטים ישנים מנפחים את הסכום) ובסופו (ה-fixture ebay)."""
         self.cart_page.clear()
 
     # 2. חיפוש עם תנאי מחיר (כולל Paging). מחזיר עד limit כתובות; פחות (גם 0) זה תקין.
     @allure.step("חיפוש '{query}' עד {max_price} (עד {limit} פריטים)")
     def search_items_by_name_under_price(self, query: str, max_price: float, limit: int = 5,
                                          max_pages: int = 5) -> List[str]:
+        """פונקציית החיפוש מהתרגיל (4.1): חיפוש לפי query, פילטר מחיר, ואיסוף עד limit פריטים עם
+        Paging. מחזיר את מה שנמצא - גם פחות מ-limit וגם 0. מועמדים נוספים נשמרים ב-spare_urls."""
         self.search_report = []                 # אבחון לכל עמוד שנסרק, מצורף לדוח
         self.search_page.search(query, max_price)
         # אוספים עד limit רזרבות מאותם עמודים; מדפדפים רק כל עוד חסרים פריטים לתוצאה עצמה
@@ -116,9 +120,11 @@ class EBayWorkflowService:
 
     @allure.step("אימות שהפריטים נמצאים בסל")
     def assert_items_in_cart(self, urls: List[str]) -> None:
+        """מוודא בסל עצמו שכל הפריטים שנוספו נמצאים בו ושמספר הפריטים תואם (תוספת על דרישות התרגיל)."""
         self.cart_page.assert_contains_items(urls)
 
     # 4. אימות סכום הסל
     @allure.step("אימות סכום הסל")
     def assert_cart_total_not_exceeds(self, budget_per_item: float, items_count: int) -> None:
+        """פונקציית אימות הסל מהתרגיל (4.3): סכום הפריטים בסל <= budget_per_item * items_count."""
         self.cart_page.assert_total_not_exceeds(budget_per_item, items_count, self.currency)

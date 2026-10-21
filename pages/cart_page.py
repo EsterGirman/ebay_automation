@@ -9,6 +9,7 @@ from .login_page import LoginPage
 
 
 class CartPage(BasePage):
+    """סל הקניות: פתיחה, ריקון, קריאת הסכומים (פריטים / משלוח / Subtotal) ואימות התקציב."""
     CART_URL = "https://cart.ebay.com/"
 
     ORDER_SUMMARY = "//*[normalize-space()='Order summary']"
@@ -75,6 +76,7 @@ class CartPage(BasePage):
         return summary
 
     def get_item_ids(self) -> Set[str]:
+        """מזהי הפריטים (המספר שב-/itm/<id>) מכל הקישורים בעמוד הסל."""
         hrefs = self.page.locator(self.CART_ITEM_LINK).evaluate_all("els => els.map(a => a.href)")
         return {i for i in map(item_id, hrefs) if i}
 
@@ -98,6 +100,7 @@ class CartPage(BasePage):
 
     @allure.step("שליפת סכומי הסל")
     def get_summary(self) -> Dict[str, Money]:
+        """פותח את הסל (אם צריך), קורא את סיכום ההזמנה ושומר צילום מסך של עמוד הסל."""
         self.open(refresh=False)
         summary = self._read_summary()
         self.take_screenshot("cart_page")

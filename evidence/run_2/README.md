@@ -26,6 +26,7 @@
 eBay מחזירה סדר "Best Match" דומה לאותו חיפוש; הבחירה האקראית של הוריאנטים שונה בכל הרצה.
 
 ## קבצים
+- [`pycharm_passed.png`](pycharm_passed.png) – PyCharm: **Tests passed: 1 of 1 test – 10 min 59 sec**
 - [`allure_overview.png`](allure_overview.png) – סיכום הדוח: 1 טסט, 100% עבר
 - [`allure_test_steps.png`](allure_test_steps.png) – צעדי הטסט, כולם עברו
 - [`allure-report/index.html`](allure-report/index.html) – הדוח המלא (להוריד ולפתוח בדפדפן)

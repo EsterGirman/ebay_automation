@@ -4,6 +4,7 @@ from .base_page import BasePage
 
 
 class HomePage(BasePage):
+    """דף הבית של eBay - נקודת הכניסה לתרחיש."""
     URL = "https://www.ebay.com/"
 
     @allure.step("כניסה לאתר דרך דף הבית")

@@ -9,6 +9,7 @@ from .base_page import BasePage, SignInRequiredError
 
 
 class LoginPage(BasePage):
+    """התחברות ל-eBay: מילוי הטופס, המתנה ל-CAPTCHA / קוד אימות, אימות ההצלחה ושמירת המצב."""
     SIGNIN_URL = "https://signin.ebay.com/"
     # עמוד שדורש התחברות מלאה. "Hi <name>" בכותרת לא מספיק: eBay מזהה סשן ישן
     # ובכל זאת דורשת סיסמה לפני פעולות סל
@@ -28,6 +29,7 @@ class LoginPage(BasePage):
 
     @allure.step("בדיקה האם המשתמש מחובר")
     def is_signed_in(self) -> bool:
+        """נכנס לעמוד שדורש התחברות מלאה (My eBay). אם eBay מעבירה למסך כניסה או אימות - לא מחובר."""
         self.navigate(self.PROTECTED_URL)
         return not (self.is_signin_page() or self.is_verification_page())
 

@@ -11,6 +11,7 @@ from .base_page import BasePage, SiteBlockedError
 
 
 class SearchResultsPage(BasePage):
+    """עמוד תוצאות החיפוש: חיפוש, פילטר מחיר, שליפת כרטיסי מוצר ב-XPath ומעבר בין עמודים."""
     SEARCH_URL = "https://www.ebay.com/sch/i.html?_nkw={query}&LH_BIN=1&_ipg=60"
 
     # כרטיס מוצר = li שמכיל קישור לדף פריט (/itm/); לא תלוי בשמות class שמשתנים
@@ -104,6 +105,7 @@ class SearchResultsPage(BasePage):
             return False
 
     def _extract(self) -> List[Dict]:
+        """שולף מכל כרטיס מוצר קישור, מחיר וטקסט - בקריאה אחת לדפדפן במקום קריאה לכל כרטיס."""
         args = {"link": self.ITEM_LINK, "price": self.ITEM_PRICE}
         return self.page.locator(self.ITEM_CONTAINER).evaluate_all(self.JS_EXTRACT, args)
 
@@ -145,6 +147,8 @@ class SearchResultsPage(BasePage):
     @allure.step("איסוף פריטים עד מחיר {max_price} (עד {limit})")
     def get_items_under_price(self, max_price: float, limit: int, currency: str,
                               already: List[str] = ()) -> List[str]:
+        """מחזיר עד limit כתובות מהעמוד הנוכחי שמחירן <= max_price (במטבע currency), בלי כפילויות
+        מעמודים קודמים (already). שומר סטטיסטיקה לעמוד ב-last_stats לצורך הדוח."""
         cards = self._read_cards()
         urls, stats = filter_cards(cards, max_price, limit, currency, already)
         stats["page_url"] = self.page.url
@@ -169,6 +173,7 @@ class SearchResultsPage(BasePage):
 
     @allure.step("מעבר לעמוד הבא")
     def go_to_next_page(self) -> bool:
+        """לוחץ 'Next' וממתין שהכתובת תשתנה. False אם אין עמוד הבא (סוף התוצאות) או שהמעבר נחסם."""
         next_btn = self.page.locator(self.NEXT_PAGE)
         if next_btn.count() == 0:
             return False

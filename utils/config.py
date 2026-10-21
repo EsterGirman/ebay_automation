@@ -15,6 +15,7 @@ REPORTS_DIR = PROJECT_ROOT / "reports"
 
 @dataclass(frozen=True)
 class Scenario:
+    """תרחיש בדיקה אחד מ-config/test_data.json (מה בודקים)."""
     id: str
     search_query: str
     max_price: float
@@ -26,6 +27,7 @@ class Scenario:
 
 @dataclass(frozen=True)
 class Credentials:
+    """פרטי ההתחברות - רק ממשתני הסביבה EBAY_USER / EBAY_PASS, לעולם לא מקובץ."""
     username: str
     password: str
 
@@ -52,6 +54,7 @@ class Profile:
 
 
 def load_scenarios(path: Path = TEST_DATA_FILE) -> List[Scenario]:
+    """כל תרחיש בקובץ הופך להרצה נפרדת של הטסט (pytest.mark.parametrize)."""
     data = json.loads(path.read_text(encoding="utf-8"))
     return [Scenario(**item) for item in data["scenarios"]]
 

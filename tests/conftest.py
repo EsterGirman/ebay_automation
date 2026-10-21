@@ -45,6 +45,7 @@ def pytest_sessionfinish(session):
 
 @pytest.hookimpl(hookwrapper=True)
 def pytest_runtest_makereport(item, call):
+    """שומר את תוצאת כל שלב בטסט על ה-item, כדי שה-fixtures יידעו בסיום אם הטסט נכשל."""
     outcome = yield
     report = outcome.get_result()
     setattr(item, f"rep_{report.when}", report)
@@ -69,6 +70,7 @@ def browser_type_launch_args(browser_type_launch_args, profile: Profile):
 
 @pytest.fixture(scope="session")
 def browser_context_args(browser_context_args):
+    """הגדרות הדפדפן לכל טסט: שפה, חלון מלא, ומצב התחברות שמור אם קיים."""
     args = {**browser_context_args, "locale": "en-US", "no_viewport": True}
     if AUTH_STATE_FILE.exists():
         args["storage_state"] = str(AUTH_STATE_FILE)   # מדלג על מסך ההתחברות
@@ -77,6 +79,7 @@ def browser_context_args(browser_context_args):
 
 @pytest.fixture
 def context(context: BrowserContext, profile: Profile) -> BrowserContext:
+    """ה-context של pytest-playwright + זמן המתנה לפי הפרופיל, טיפול בחלונות קופצים וחסימת תמונות."""
     context.set_default_timeout(profile.default_timeout_ms)
     context.on("page", BasePage.install_popup_handlers)   # גם ללשוניות הפריטים
     if profile.block_images:
@@ -140,5 +143,6 @@ def ebay(page: Page, scenario: Scenario, request,
 
 @pytest.fixture
 def page(page: Page, request) -> Iterator[Page]:
+    """ה-page של pytest-playwright + צילום מסך לדוח כשהטסט נכשל."""
     yield page
     _attach_failure_artifacts(request, page)

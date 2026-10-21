@@ -12,6 +12,7 @@ class ItemNotAddedError(Exception):
 
 
 class ItemDetailsPage(BasePage):
+    """דף פריט: בחירת וריאנטים אקראית (מידה/צבע), לחיצה על 'Add to cart' ואימות שהפריט נוסף."""
     BAD_OPTION_WORDS = ("select", "out of stock", "sold out", "unavailable")
 
     # לא בוחרים בתיבות שבתוך חלונות קופצים (למשל בחירת מדינת משלוח בחלון המיקום)

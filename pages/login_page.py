@@ -85,19 +85,34 @@ class LoginPage(BasePage):
         """פעולה אחת לפי המסך: סיסמה אם השדה מוצג, אחרת שם משתמש. לא חוזרים על אותה פעולה
         לפני RETRY_SEC, כדי לתת לעמוד זמן להגיב."""
         if self.page.locator(self.PASSWORD_INPUT).is_visible():
-            if second - last_action["password"] >= self.RETRY_SEC:
-                if last_action["password"] >= 0:
-                    self.logger.warning("Sign-in did not respond, submitting password again")
-                self.page.locator(self.PASSWORD_INPUT).fill(self.credentials.password)
-                self.page.locator(self.SUBMIT_BUTTON).click()
-                last_action["password"] = second
+            step, field, value, button = ("password", self.PASSWORD_INPUT,
+                                          self.credentials.password, self.SUBMIT_BUTTON)
         elif self.page.locator(self.USERNAME_INPUT).is_visible():
-            if second - last_action["username"] >= self.RETRY_SEC:
-                if last_action["username"] >= 0:
-                    self.logger.warning("'Continue' did not respond, clicking again")
-                self.page.locator(self.USERNAME_INPUT).fill(self.credentials.username)
-                self.page.locator(self.CONTINUE_BUTTON).click()
-                last_action["username"] = second
+            step, field, value, button = ("username", self.USERNAME_INPUT,
+                                          self.credentials.username, self.CONTINUE_BUTTON)
+        else:
+            return
+        if second - last_action[step] < self.RETRY_SEC:
+            return
+        retry = last_action[step] >= 0
+        if retry:
+            self.logger.warning(f"Sign-in {step} step did not respond - typing and pressing Enter")
+        self._submit_field(field, value, button, retry)
+        last_action[step] = second
+
+    def _submit_field(self, field: str, value: str, button: str, retry: bool) -> None:
+        """ניסיון ראשון: מילוי ולחיצה על הכפתור. ניסיון חוזר: כמו משתמש - הקלדה תו-תו ו-Enter,
+        כי בעמוד שנטען לאט הרכיב של eBay לא תמיד קולט fill ולחיצה (כמו בפילטר המחיר)."""
+        locator = self.page.locator(field)
+        if not retry:
+            locator.fill(value)
+            self.page.locator(button).click()
+            return
+        locator.click()
+        locator.press("Control+A")
+        locator.press("Backspace")
+        locator.press_sequentially(value, delay=80)
+        locator.press("Enter")
 
     def is_verification_page(self) -> bool:
         """CAPTCHA או אימות זהות (step-up) - שלב בתוך ההתחברות, לא התחברות שהושלמה."""

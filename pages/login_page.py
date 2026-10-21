@@ -19,7 +19,7 @@ class LoginPage(BasePage):
     CONTINUE_BUTTON = "//button[@id='signin-continue-btn']"
     PASSWORD_INPUT = "//input[@id='pass']"
     SUBMIT_BUTTON = "//button[@id='sgnBt']"
-    RETRY_SEC = 15          # seconds without a response before repeating a click that didn't register
+    RETRY_SEC = 15
 
     def __init__(self, page: Page, credentials: Optional[Credentials] = None):
         super().__init__(page)

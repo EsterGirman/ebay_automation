@@ -29,7 +29,6 @@ class AccountInfoRequiredError(SignInRequiredError):
 class BasePage:
     """Base for all Page Objects: resilient navigation (retries, block and bot-check detection),
     waits, screenshots and popup handling. Each page adds only its own locators and actions."""
-    # Texts that identify an eBay block / generic error page
     BLOCK_MARKERS = (
         "something went wrong on our end",
         "pardon our interruption",
@@ -38,7 +37,7 @@ class BasePage:
 
     # eBay's browser-check page: not a block, it redirects to the content by itself
     BROWSER_CHECK_MARKER = "checking your browser before you access ebay"
-    BROWSER_CHECK_WAIT_SEC = 180      # observed: seconds up to ~3 minutes, depending on load/network
+    BROWSER_CHECK_WAIT_SEC = 180
 
     # "Are you shipping to ...?" popup covers the page and swallows clicks/typing. Text/role
     # locator, not XPath: the popup is injected dynamically and XPath doesn't pierce Shadow DOM

@@ -17,14 +17,14 @@ class ItemDetailsPage(BasePage):
 
     # Skip dropdowns inside popups (e.g. the shipping-country select in the location dialog)
     VARIANT_SELECT = "//select[not(@disabled)][not(ancestor::*[@role='dialog'])]"
-    VARIANT_LISTBOX_BUTTON = "//div[contains(@class, 'x-msku')]//button[@aria-haspopup='listbox']"
+    VARIANT_LISTBOX_BUTTON = ("//*[@data-testid='x-msku-evo']//button[@aria-haspopup='listbox'] | "
+                              "//div[contains(@class, 'x-msku')]//button[@aria-haspopup='listbox']")
     LISTBOX_OPTION = "//*[@role='option' and not(@aria-disabled='true')]"
     ADD_TO_CART_BUTTON = (
         "//a[contains(@id, 'atcBtn')] | "
         "//*[self::a or self::button][.//span[normalize-space()='Add to cart']] | "
         "//*[self::a or self::button][normalize-space()='Add to cart']"
     )
-    # "Complete your account info" form, shown to a signed-in account without an address
     ACCOUNT_INFO_FORM = ("//*[self::h1 or self::h2]"
                          "[contains(normalize-space(), 'Complete your account info')]")
     ADDED_CONFIRMATION = (
@@ -33,7 +33,6 @@ class ItemDetailsPage(BasePage):
         "or contains(., 'Go to cart') or contains(., 'View cart')]"
     )
 
-    # ---------- Variants ----------
     def _is_good_option(self, text: str) -> bool:
         t = text.strip().lower()
         return bool(t) and not any(w in t for w in self.BAD_OPTION_WORDS)
@@ -131,7 +130,6 @@ class ItemDetailsPage(BasePage):
         if not self.is_cart_page():
             raise ItemNotAddedError(f"No 'Added to cart' confirmation (now at {self.page.url})")
 
-    # ---------- Add to cart ----------
     @allure.step("הוספת {label} לסל: {url}")
     def add_to_cart(self, url: str, label: str) -> bool:
         """Return True if added. A single item failure is logged and doesn't fail the scenario; a sign-in failure does."""

@@ -14,12 +14,11 @@ class SearchResultsPage(BasePage):
     """Search results page: search, price filter, product cards via XPath, and paging."""
     SEARCH_URL = "https://www.ebay.com/sch/i.html?_nkw={query}&LH_BIN=1&_ipg=60"
 
-    # Product card = an li that contains a link to an item page (/itm/); independent of changing class names
     ITEM_CONTAINER = "//li[.//a[contains(@href, '/itm/')]]"
-    ITEM_PRICE = ".//span[contains(@class, 'price')]"
+    ITEM_PRICE = ".//*[contains(@class, 's-card__price')] | .//span[contains(@class, 'price')]"
     ITEM_LINK = ".//a[contains(@href, '/itm/')]"
-    NEXT_PAGE = "//a[contains(@class, 'pagination__next')]"
-    # Price filter in the results sidebar
+    NEXT_PAGE = ("//a[@type='next'] | //a[@aria-label='Go to next search page'] | "
+                 "//a[contains(@class, 'pagination__next')]")
     # Text field only: the price-graph slider has the same aria-label and is hidden
     MAX_PRICE_INPUT = ("//div[contains(@class, 'textrange')]"
                        "//input[@type='text' and starts-with(@placeholder, 'Max')]")

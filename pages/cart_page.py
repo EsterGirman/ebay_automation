@@ -15,7 +15,10 @@ class CartPage(BasePage):
     ORDER_SUMMARY = "//*[normalize-space()='Order summary']"
     REMOVE_BUTTON = ("//button[@data-test-id='cart-remove-item'] | "
                      "//button[normalize-space()='Remove']")
-    CART_ITEM_LINK = "//a[contains(@href, '/itm/')]"
+    # Links of the cart's own line items (not 'recommended items' further down the page)
+    CART_ITEM_LINK = ("//a[@data-test-id='cart-item-link'] | "
+                      "//*[@data-test-id='list-summary']//a[contains(@href, '/itm/')]")
+    ANY_ITEM_LINK = "//a[contains(@href, '/itm/')]"
     EMPTY_CART_MESSAGE = "//*[contains(text(), \"You don't have any items in your cart\")]"
 
     @allure.step("פתיחת סל הקניות")
@@ -77,7 +80,11 @@ class CartPage(BasePage):
 
     def get_item_ids(self) -> Set[str]:
         """Item IDs (the number in /itm/<id>) from all links on the cart page."""
-        hrefs = self.page.locator(self.CART_ITEM_LINK).evaluate_all("els => els.map(a => a.href)")
+        links = self.page.locator(self.CART_ITEM_LINK)
+        if not links.count():
+            self.logger.warning("Cart item links not found by test id - falling back to all item links")
+            links = self.page.locator(self.ANY_ITEM_LINK)
+        hrefs = links.evaluate_all("els => els.map(a => a.href)")
         return {i for i in map(item_id, hrefs) if i}
 
     @allure.step("אימות שכל הפריטים שנוספו נמצאים בסל")

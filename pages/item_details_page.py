@@ -1,7 +1,8 @@
 import random
+from typing import Optional
 
 import allure
-from playwright.sync_api import Locator, TimeoutError as PlaywrightTimeout
+from playwright.sync_api import Error as PlaywrightError, Locator, TimeoutError as PlaywrightTimeout
 
 from .base_page import AccountInfoRequiredError, BasePage, SignInRequiredError
 from .cart_page import CartPage
@@ -49,8 +50,8 @@ class ItemDetailsPage(BasePage):
                     chosen = random.choice(valid)
                     dropdown.select_option(value=chosen)
                     self.logger.info(f"Selected variant (select): {chosen}")
-            except Exception as e:
-                self.logger.info(f"Select variant skipped: {e}")
+            except PlaywrightError as e:
+                self.logger.info(f"Select variant skipped: {str(e).splitlines()[0]}")
 
         for button in self.page.locator(self.VARIANT_LISTBOX_BUTTON).all():
             for _ in range(2):
@@ -65,56 +66,47 @@ class ItemDetailsPage(BasePage):
             listbox_id = button.get_attribute("aria-controls")
             if listbox_id:
                 listbox = self.page.locator(f"//*[@id='{listbox_id}']")
-                listbox.wait_for(state="visible", timeout=5000)  # opens with an animation
+                listbox.wait_for(state="visible", timeout=self.QUICK_MS)  # opens with an animation
                 candidates = listbox.locator("xpath=." + self.LISTBOX_OPTION)
             else:
-                self.page.wait_for_timeout(1000)
                 candidates = self.page.locator(self.LISTBOX_OPTION)
+                candidates.first.wait_for(state="visible", timeout=self.QUICK_MS)
             options = [o for o in candidates.all()
-                       if o.is_visible() and self._is_good_option(o.inner_text(timeout=2000))]
+                       if o.is_visible() and self._is_good_option(o.inner_text(timeout=self.QUICK_MS))]
             if not options:
                 self.page.keyboard.press("Escape")
                 return False
-            random.choice(options).click(timeout=5000)
+            random.choice(options).click(timeout=self.QUICK_MS)
             selected = button.locator("xpath=.//span[contains(@class, 'btn__text')]")
-            for _ in range(10):
-                text = (selected.first.inner_text(timeout=2000) if selected.count()
-                        else button.inner_text(timeout=2000)).strip()
-                if text and text.lower() != "select":
-                    break
-                self.page.wait_for_timeout(300)
-            else:
+            shown = selected.first if selected.count() else button
+            try:
+                self.page.wait_for_function(  # until the button shows the chosen value
+                    "el => { const t = el.textContent.trim().toLowerCase(); return t && !t.endsWith('select'); }",
+                    arg=shown.element_handle(), timeout=self.QUICK_MS)
+            except PlaywrightTimeout:
                 return False
             self.logger.info("Selected variant (listbox): " + " ".join(button.inner_text().split()))
             return True
-        except Exception as e:
+        except PlaywrightError as e:
             self.logger.info(f"Listbox variant skipped: {str(e).splitlines()[0]}")
             self.page.keyboard.press("Escape")
             return False
 
-    # Is the button disabled?
-    @staticmethod
-    def _is_disabled(button: Locator) -> bool:
-        try:
-            cls = (button.get_attribute("class") or "").lower()
-            return (not button.is_enabled() or button.get_attribute("aria-disabled") == "true"
-                    or "disabled" in cls)
-        except Exception:
-            return False
-
     # Wait for Add to cart to enable
-    def _wait_until_enabled(self, button: Locator, timeout_ms: int = 15000) -> None:
-        for _ in range(timeout_ms // 500):
-            if not self._is_disabled(button):
-                return
-            self.page.wait_for_timeout(500)
-        raise ItemNotAddedError("Add to cart is disabled (item not purchasable here, "
-                                "selection required, or page not fully loaded)")
+    def _wait_until_enabled(self, button: Locator, timeout_ms: Optional[int] = None) -> None:
+        try:
+            self.page.wait_for_function(
+                "b => !(b.disabled || b.getAttribute('aria-disabled') === 'true'"
+                " || /disabled/i.test(String(b.className)))",
+                arg=button.element_handle(), timeout=timeout_ms)
+        except PlaywrightTimeout:
+            raise ItemNotAddedError("Add to cart is disabled (item not purchasable here, "
+                                    "selection required, or page not fully loaded)") from None
 
     # Wait for 'Added to cart'
     def _wait_for_added_confirmation(self) -> None:
         try:
-            self.page.wait_for_selector(self.ADDED_CONFIRMATION, timeout=10000)
+            self.page.wait_for_selector(self.ADDED_CONFIRMATION, timeout=2 * self.QUICK_MS)
             return
         except PlaywrightTimeout:
             pass
@@ -130,7 +122,7 @@ class ItemDetailsPage(BasePage):
     def add_to_cart(self, url: str, label: str) -> bool:
         step = "navigate"
         try:
-            self.navigate(url, retries=0, timeout=45000)
+            self.navigate(url, retries=0)
             step = "select_variants"
             self._select_random_variants()
             step = "find_add_to_cart_button"
@@ -152,7 +144,7 @@ class ItemDetailsPage(BasePage):
             return True
         except SignInRequiredError:
             raise
-        except Exception as e:
+        except (PlaywrightError, ItemNotAddedError) as e:  # expected on a live site; real bugs still raise
             first_line = str(e).strip().splitlines()[0] if str(e).strip() else ""
             self.logger.error(f"{label} failed at step '{step}': "
                               f"{type(e).__name__}: {first_line} | url={url}")

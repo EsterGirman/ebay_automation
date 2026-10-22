@@ -1,5 +1,6 @@
 import re
-from typing import Dict, Iterable, List, NamedTuple, Optional, Tuple
+from decimal import Decimal
+from typing import Dict, Iterable, List, NamedTuple, Optional, Tuple, Union
 
 _CURRENCY_CODES = {
     "US $": "USD", "USD": "USD", "$": "USD",  # order matters: "US $" before "$"
@@ -8,7 +9,7 @@ _CURRENCY_CODES = {
     "GBP": "GBP", "£": "GBP",
 }
 _CUR = r"(US\s?\$|USD|\$|ILS|NIS|₪|EUR|€|GBP|£)"
-_NUM = r"(\d[\d,]*(?:\.\d+)?)"
+_NUM = r"(\d(?:[\d.,]*\d)?)"
 _PRICE_RE = re.compile(_CUR + r"\s?" + _NUM + r"(?:\s*to\s*" + _CUR + r"?\s?" + _NUM + r")?",
                        re.IGNORECASE)
 
@@ -16,8 +17,20 @@ FAKE_ITEM_MARKER = "/itm/123456"
 
 
 class Money(NamedTuple):
-    amount: float
+    amount: Decimal
     currency: str
+
+
+# '1,234.50' / '1.234,50' / '12,50' / '1,234' -> Decimal
+def _to_decimal(raw: str) -> Decimal:
+    if "," in raw and "." in raw:                      # the last separator is the decimal point
+        thousands = "," if raw.rfind(".") > raw.rfind(",") else "."
+        raw = raw.replace(thousands, "").replace(",", ".")
+    elif "," in raw:
+        raw = raw.replace(",", ".") if re.search(r",\d{1,2}$", raw) else raw.replace(",", "")
+    elif raw.count(".") > 1:                           # 1.234.567
+        raw = raw.replace(".", "")
+    return Decimal(raw)
 
 
 # Currency symbol -> ISO code
@@ -33,12 +46,12 @@ def parse_money(text: Optional[str]) -> Optional[Money]:
     if not m:
         return None
     cur, low, _, high = m.groups()
-    amount = max(float(v.replace(",", "")) for v in (low, high) if v)
+    amount = max(_to_decimal(v) for v in (low, high) if v)
     return Money(amount, _currency_code(cur))
 
 
 # Price text -> amount
-def parse_price(text: Optional[str]) -> Optional[float]:
+def parse_price(text: Optional[str]) -> Optional[Decimal]:
     money = parse_money(text)
     return money.amount if money else None
 
@@ -72,8 +85,9 @@ def item_id(url: str) -> Optional[str]:
 
 
 # Cards -> URLs within budget
-def filter_cards(cards: List[Dict], max_price: float, limit: int, currency: str = "USD",
-                 already: Iterable[str] = ()) -> Tuple[List[str], Dict]:
+def filter_cards(cards: List[Dict], max_price: Union[Decimal, int, str], limit: int,
+                 currency: str = "USD", already: Iterable[str] = ()) -> Tuple[List[str], Dict]:
+    max_price = Decimal(str(max_price))
     seen = set(already)
     urls: List[str] = []
     stats = {"cards": len(cards), "no_link": 0, "no_price": 0, "other_currency": 0,

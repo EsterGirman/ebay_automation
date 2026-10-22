@@ -1,6 +1,7 @@
 import json
 import os
 from dataclasses import dataclass
+from decimal import Decimal
 from pathlib import Path
 from typing import List, Optional
 
@@ -15,8 +16,8 @@ REPORTS_DIR = PROJECT_ROOT / "reports"
 class Scenario:
     id: str
     search_query: str
-    max_price: float
-    budget_per_item: float
+    max_price: Decimal
+    budget_per_item: Decimal
     currency: str = "USD"
     limit: int = 5
     max_pages: int = 5
@@ -47,12 +48,15 @@ class Profile:
     block_images: bool
     default_timeout_ms: int
     login_wait_sec: int
+    item_pause_ms: int
 
 
 # Load test scenarios from JSON
 def load_scenarios(path: Path = TEST_DATA_FILE) -> List[Scenario]:
-    data = json.loads(path.read_text(encoding="utf-8"))
-    return [Scenario(**item) for item in data["scenarios"]]
+    data = json.loads(path.read_text(encoding="utf-8"), parse_float=Decimal)
+    return [Scenario(**{**item, "max_price": Decimal(str(item["max_price"])),
+                        "budget_per_item": Decimal(str(item["budget_per_item"]))})
+            for item in data["scenarios"]]
 
 
 # Load run profile + env overrides
@@ -68,6 +72,7 @@ def load_profile(path: Path = PROFILES_FILE) -> Profile:
         block_images=env_flag("EBAY_BLOCK_IMAGES", p["block_images"]),
         default_timeout_ms=env_int("EBAY_TIMEOUT_MS", p["default_timeout_ms"]),
         login_wait_sec=env_int("EBAY_LOGIN_WAIT_SEC", p["login_wait_sec"]),
+        item_pause_ms=env_int("EBAY_ITEM_PAUSE_MS", p["item_pause_ms"]),
     )
 
 

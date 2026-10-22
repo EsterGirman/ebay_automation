@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 import pytest
 
 from utils.parsing import (Money, filter_cards, item_id, parse_cart_item_count, parse_cart_summary,
@@ -6,14 +8,18 @@ from utils.parsing import (Money, filter_cards, item_id, parse_cart_item_count, 
 
 # Amount and currency parsing
 @pytest.mark.parametrize("text, expected", [
-    ("ILS 257.15\nor Best Offer\n+ILS 333.21 delivery", Money(257.15, "ILS")),
-    ("ILS 1,234.50 to ILS 2,000.00", Money(2000.0, "ILS")),
-    ("US $45.99", Money(45.99, "USD")),
-    ("US$45.99", Money(45.99, "USD")),
-    ("$10.00 to $20.00", Money(20.0, "USD")),
-    ("₪ 99.90", Money(99.9, "ILS")),
-    ("EUR 12.00", Money(12.0, "EUR")),
-    ("Subtotal (3 items)\nUS $123.45", Money(123.45, "USD")),
+    ("ILS 257.15\nor Best Offer\n+ILS 333.21 delivery", Money(Decimal("257.15"), "ILS")),
+    ("ILS 1,234.50 to ILS 2,000.00", Money(Decimal("2000.00"), "ILS")),
+    ("US $45.99", Money(Decimal("45.99"), "USD")),
+    ("US$45.99", Money(Decimal("45.99"), "USD")),
+    ("$10.00 to $20.00", Money(Decimal("20.00"), "USD")),
+    ("₪ 99.90", Money(Decimal("99.90"), "ILS")),
+    ("EUR 12.00", Money(Decimal("12.00"), "EUR")),
+    ("Subtotal (3 items)\nUS $123.45", Money(Decimal("123.45"), "USD")),
+    ("$1,234", Money(Decimal("1234"), "USD")),
+    ("EUR 12,50", Money(Decimal("12.50"), "EUR")),
+    ("EUR 1.234,50", Money(Decimal("1234.50"), "EUR")),
+    ("EUR 1.234.567", Money(Decimal("1234567"), "EUR")),
     ("Free delivery", None),
     ("", None),
     (None, None),
@@ -24,7 +30,13 @@ def test_parse_money(text, expected):
 
 # Amount only
 def test_parse_price_returns_amount_only():
-    assert parse_price("US $45.99") == 45.99 and parse_price("no price") is None
+    assert parse_price("US $45.99") == Decimal("45.99") and parse_price("no price") is None
+
+
+# Exact money math (float would give 0.30000000000000004)
+def test_money_sum_is_exact():
+    total = sum(parse_price(t) for t in ("$0.10", "$0.20"))
+    assert total == Decimal("0.30") and total <= Decimal("0.30")
 
 
 # Build a fake result card
@@ -93,8 +105,8 @@ CART_TEXT = ("Standard International Shipping\nRemove\nOrder summary\nItems (5)\
 # Items / shipping / subtotal
 def test_cart_summary_separates_items_shipping_and_subtotal():
     summary = parse_cart_summary(CART_TEXT)
-    assert summary == {"items": Money(605.30, "ILS"), "shipping": Money(381.92, "ILS"),
-                       "subtotal": Money(987.22, "ILS")}
+    assert summary == {"items": Money(Decimal("605.30"), "ILS"), "shipping": Money(Decimal("381.92"), "ILS"),
+                       "subtotal": Money(Decimal("987.22"), "ILS")}
 
 
 # Free shipping
@@ -102,7 +114,7 @@ def test_cart_summary_free_shipping_is_not_mistaken_for_subtotal():
     summary = parse_cart_summary("Order summary\nItems (1)\nUS $50.00\nShipping\nFree\n"
                                  "Subtotal\nUS $50.00")
     assert "shipping" not in summary
-    assert summary["items"] == summary["subtotal"] == Money(50.0, "USD")
+    assert summary["items"] == summary["subtotal"] == Money(Decimal("50.00"), "USD")
 
 
 # Item ID from URL

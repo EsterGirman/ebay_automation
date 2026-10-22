@@ -1,9 +1,10 @@
 import re
+from decimal import Decimal
 from typing import Dict, List
 from urllib.parse import quote_plus
 
 import allure
-from playwright.sync_api import Page, TimeoutError as PlaywrightTimeout
+from playwright.sync_api import Error as PlaywrightError, Page, TimeoutError as PlaywrightTimeout
 
 from utils.config import REPORTS_DIR
 from utils.parsing import FAKE_ITEM_MARKER, filter_cards
@@ -22,6 +23,17 @@ class SearchResultsPage(BasePage):
                        "//input[@type='text' and starts-with(@placeholder, 'Max')]")
     PRICE_SUBMIT = "//button[@title='Submit price range' or @aria-label='Submit price range']"
 
+    JS_ENOUGH_CARDS = """([xp, n, fake]) => {
+        window.scrollBy(0, 2500);
+        const r = document.evaluate(xp, document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+        let real = 0;
+        for (let i = 0; i < r.snapshotLength; i++) {
+            const a = r.snapshotItem(i).querySelector("a[href*='/itm/']");
+            if (a && !a.href.includes(fake)) real++;
+        }
+        return real >= n;
+    }"""
+
     JS_EXTRACT = """(els, xp) => els.map(li => {
         const first = (path) => document.evaluate(path, li, null,
             XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
@@ -37,7 +49,7 @@ class SearchResultsPage(BasePage):
 
     # Search and apply price filter
     @allure.step("חיפוש: {query} עד מחיר {max_price}")
-    def search(self, query: str, max_price: float) -> None:
+    def search(self, query: str, max_price: Decimal) -> None:
         url = self.SEARCH_URL.format(query=quote_plus(query))
         self.navigate(url)
         if not self._apply_price_filter_ui(max_price):
@@ -46,19 +58,20 @@ class SearchResultsPage(BasePage):
 
     # 220.0 -> '220'
     @staticmethod
-    def _format_price(price: float) -> str:
-        return str(int(price)) if float(price).is_integer() else str(price)
+    def _format_price(price: Decimal) -> str:
+        d = Decimal(str(price))
+        return str(int(d)) if d == d.to_integral_value() else format(d.normalize(), "f")
 
     # Use the on-page price filter
-    def _apply_price_filter_ui(self, max_price: float, attempts: int = 2) -> bool:
+    def _apply_price_filter_ui(self, max_price: Decimal, attempts: int = 2) -> bool:
         for attempt in range(1, attempts + 1):
-            if not self.is_visible_within(self.MAX_PRICE_INPUT, timeout=15000):
+            if not self.is_visible_within(self.MAX_PRICE_INPUT):
                 return False
             try:
                 if not self._type_max_price(max_price):
                     return False
                 self.page.locator(self.PRICE_SUBMIT).first.click()
-                if self._wait_for_filter_applied(timeout_ms=20000):
+                if self._wait_for_filter_applied(timeout_ms=3 * self.QUICK_MS):
                     self.logger.info("Price filter applied via page UI")
                     return True
                 self.logger.info(f"Price filter not applied (attempt {attempt}/{attempts})")
@@ -67,7 +80,7 @@ class SearchResultsPage(BasePage):
         return False
 
     # Type max price until accepted
-    def _type_max_price(self, max_price: float) -> bool:
+    def _type_max_price(self, max_price: Decimal) -> bool:
         max_input = self.page.locator(self.MAX_PRICE_INPUT).first
         submit = self.page.locator(self.PRICE_SUBMIT).first
         max_input.scroll_into_view_if_needed()
@@ -76,20 +89,19 @@ class SearchResultsPage(BasePage):
             max_input.press("Control+A")
             max_input.press("Backspace")
             max_input.press_sequentially(self._format_price(max_price), delay=100)  # component ignores fill()
-            if self._wait_until_enabled(submit, timeout_ms=3000):
+            if self._wait_until_enabled(submit, timeout_ms=self.QUICK_MS):
                 return True
         return False
 
     # Wait for filter in URL
     def _wait_for_filter_applied(self, timeout_ms: int) -> bool:
-        for _ in range(timeout_ms // 500):
-            if re.search(r"[?&]_udhi=", self.page.url):
-                self.page.wait_for_load_state("domcontentloaded")
-                return True
-            if self.confirm_ship_to_if_shown():
-                return False
-            self.page.wait_for_timeout(500)
-        return False
+        try:
+            self.page.wait_for_url(re.compile(r"[?&]_udhi="), timeout=timeout_ms,
+                                   wait_until="domcontentloaded")
+            return True
+        except PlaywrightTimeout:
+            self.confirm_ship_to_if_shown()  # location popup came instead; next attempt reapplies
+            return False
 
     # Wait for button to enable
     def _wait_until_enabled(self, button, timeout_ms: int) -> bool:
@@ -120,30 +132,31 @@ class SearchResultsPage(BasePage):
                     "eBay shows a block/error page instead of results. "
                     "Refreshing will not help - wait (minutes to hours) and run again.")
             try:
-                self.page.wait_for_selector(self.ITEM_CONTAINER, state="attached", timeout=15000)
+                self.page.wait_for_selector(self.ITEM_CONTAINER, state="attached")
             except PlaywrightTimeout:
                 pass
-            for _ in range(10):
-                self.page.mouse.wheel(0, 2500)
-                self.page.wait_for_timeout(300)
-                self.page.mouse.wheel(0, -20000)
-                cards = self._extract()
-                if self._real_cards(cards) >= min_cards:
-                    return cards
-                self.page.wait_for_timeout(1700)
+            try:
+                self.page.wait_for_function(  # scrolls to trigger lazy-load until enough cards exist
+                    self.JS_ENOUGH_CARDS, arg=[self.ITEM_CONTAINER, min_cards, FAKE_ITEM_MARKER],
+                    polling=500)
+            except PlaywrightTimeout:
+                pass
+            self.page.evaluate("window.scrollTo(0, 0)")
+            cards = self._extract()
+            if self._real_cards(cards) >= min_cards:
+                return cards
             if attempt < max_reloads:
                 self.logger.warning(f"Results page incomplete ({self._real_cards(cards)} real cards) "
                                     f"- reloading (attempt {attempt + 1}/{max_reloads})")
-                self.page.wait_for_timeout(5000)
                 try:
-                    self.page.reload(wait_until="domcontentloaded", timeout=45000)
+                    self.page.reload(wait_until="domcontentloaded", timeout=self.NAVIGATION_MS)
                 except PlaywrightTimeout:
                     self.logger.warning("Reload exceeded timeout, continuing")
         return cards
 
     # Item URLs under max price
     @allure.step("איסוף פריטים עד מחיר {max_price} (עד {limit})")
-    def get_items_under_price(self, max_price: float, limit: int, currency: str,
+    def get_items_under_price(self, max_price: Decimal, limit: int, currency: str,
                               already: List[str] = ()) -> List[str]:
         cards = self._read_cards()
         urls, stats = filter_cards(cards, max_price, limit, currency, already)
@@ -164,7 +177,7 @@ class SearchResultsPage(BasePage):
             html = self.page.content()
             (REPORTS_DIR / f"{name}.html").write_text(html, encoding="utf-8")
             allure.attach(html, name=name, attachment_type=allure.attachment_type.HTML)
-        except Exception as e:
+        except (PlaywrightError, OSError) as e:
             self.logger.warning(f"Could not save page HTML: {e}")
 
     # Go to next results page
@@ -178,12 +191,12 @@ class SearchResultsPage(BasePage):
                 return False
             previous_url = self.page.url
             next_btn.first.click()
-            self.page.wait_for_url(lambda url: url != previous_url, timeout=30000,
+            self.page.wait_for_url(lambda url: url != previous_url, timeout=self.NAVIGATION_MS,
                                    wait_until="domcontentloaded")
             if self.is_blocked():
                 self.take_screenshot("blocked_on_paging")
                 return False
             return True
-        except Exception as e:
-            self.logger.warning(f"Paging failed: {e}")
+        except PlaywrightError as e:
+            self.logger.warning(f"Paging failed: {str(e).splitlines()[0]}")
             return False

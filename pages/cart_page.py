@@ -1,3 +1,4 @@
+from decimal import Decimal
 from typing import Dict, List, Set
 
 import allure
@@ -17,16 +18,17 @@ class CartPage(BasePage):
     CART_ITEM_LINK = ("//a[@data-test-id='cart-item-link'] | "
                       "//*[@data-test-id='list-summary']//a[contains(@href, '/itm/')]")
     ANY_ITEM_LINK = "//a[contains(@href, '/itm/')]"
-    EMPTY_CART_MESSAGE = "//*[contains(text(), \"You don't have any items in your cart\")]"
+    EMPTY_CART_MESSAGE = ("//div[contains(@class, 'empty-cart')] | "  # the text also sits in a <script>
+                          "//span[contains(text(), \"You don't have any items in your cart\")]")
 
     # Open the cart page
     @allure.step("פתיחת סל הקניות")
     def open(self, refresh: bool = True) -> None:
         if not refresh and self.is_cart_page():
             return
-        self.navigate(self.CART_URL, wait_until="commit", timeout=45000)
+        self.navigate(self.CART_URL, wait_until="commit")
         try:
-            self.page.wait_for_load_state("domcontentloaded", timeout=20000)
+            self.page.wait_for_load_state("domcontentloaded")
         except PlaywrightTimeout:
             self.logger.warning("Cart page is slow to load, continuing")
         LoginPage(self.page).complete_sign_in_if_prompted()
@@ -43,14 +45,14 @@ class CartPage(BasePage):
         self._wait_until_loaded()  # items render after load
         removed = 0
         buttons = self.page.locator(self.REMOVE_BUTTON)
-        while removed < max_items and self.is_visible_within(self.REMOVE_BUTTON, timeout=15000):
+        while removed < max_items and self.is_visible_within(self.REMOVE_BUTTON, timeout=self.QUICK_MS):
             before = buttons.count()
             buttons.first.click()
             try:
                 self.page.wait_for_function(
                     "([xp, n]) => document.evaluate(`count(${xp})`, document, null, "
                     "XPathResult.NUMBER_TYPE, null).numberValue < n",
-                    arg=[self.REMOVE_BUTTON, before], timeout=15000)
+                    arg=[self.REMOVE_BUTTON, before])
             except PlaywrightTimeout:
                 self.logger.warning("Cart item removal not reflected yet, reloading")
                 self.page.reload(wait_until="domcontentloaded")
@@ -68,7 +70,7 @@ class CartPage(BasePage):
     # Read order summary totals
     def _read_summary(self) -> Dict[str, Money]:
         try:
-            self.wait_for_element_visible(self.ORDER_SUMMARY, 20000)
+            self.wait_for_element_visible(self.ORDER_SUMMARY)
         except PlaywrightTimeout:
             self.logger.info("Order summary block not found, parsing the whole page text")
         summary = parse_cart_summary(self.page.inner_text("body"))
@@ -121,9 +123,9 @@ class CartPage(BasePage):
 
     # Assert items total within budget
     @allure.step("אימות שמחיר הפריטים בסל ≤ {budget_per_item} × {items_count}")
-    def assert_total_not_exceeds(self, budget_per_item: float, items_count: int,
+    def assert_total_not_exceeds(self, budget_per_item: Decimal, items_count: int,
                                  currency: str = "USD") -> None:
-        threshold = budget_per_item * items_count
+        threshold = Decimal(str(budget_per_item)) * items_count
         summary = self.get_summary()
         items_total = summary.get("items") or summary["subtotal"]  # subtotal includes shipping
         lines = [f"{k}={v.amount} {v.currency}" for k, v in summary.items()]

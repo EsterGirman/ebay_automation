@@ -1,11 +1,12 @@
+import time
 from typing import Optional
 from urllib.parse import urlparse
 
 import allure
-from playwright.sync_api import Page
+from playwright.sync_api import Page, TimeoutError as PlaywrightTimeout
 
 from utils.config import AUTH_STATE_FILE, Credentials, load_profile
-from .base_page import BasePage, SignInRequiredError
+from .base_page import AccountInfoRequiredError, BasePage, SignInRequiredError
 
 
 class LoginPage(BasePage):
@@ -17,6 +18,7 @@ class LoginPage(BasePage):
     PASSWORD_INPUT = "//input[@id='pass']"
     SUBMIT_BUTTON = "//button[@id='sgnBt']"
     RETRY_SEC = 15
+    SCREEN_CHANGE_MS = 2_000
 
     # Credentials and manual wait time
     def __init__(self, page: Page, credentials: Optional[Credentials] = None):
@@ -28,7 +30,8 @@ class LoginPage(BasePage):
     @allure.step("בדיקה האם המשתמש מחובר")
     def is_signed_in(self) -> bool:
         self.navigate(self.PROTECTED_URL)
-        return not (self.is_signin_page() or self.is_verification_page())
+        return not (self.is_signin_page() or self.is_verification_page()
+                    or self.is_account_upgrade_page())
 
     # Sign in and save auth state
     @allure.step("הזדהות למערכת")
@@ -36,12 +39,20 @@ class LoginPage(BasePage):
         if self.is_signed_in():
             self.logger.info("Already signed in (saved auth state)")
             return
+        self._raise_if_account_upgrade()
         self.complete_sign_in_if_prompted()
         if not self.is_signed_in():
+            self._raise_if_account_upgrade()
             self.take_screenshot("signin_not_verified")
             raise SignInRequiredError("Sign-in looked complete but My eBay still asks to sign in.")
         self._save_auth_state()
         self.logger.info("Signed in (verified on My eBay)")
+
+    # Signed in, but the account has no address
+    def _raise_if_account_upgrade(self) -> None:
+        if self.is_account_upgrade_page():
+            self.take_screenshot("account_info_required")
+            raise AccountInfoRequiredError(AccountInfoRequiredError.MESSAGE)
 
     # Finish sign-in / CAPTCHA / code
     @allure.step("השלמת התחברות")
@@ -53,7 +64,8 @@ class LoginPage(BasePage):
             self.logger.warning("No EBAY_USER/EBAY_PASS - waiting for manual sign-in in the browser")
         last_action = {"username": -self.RETRY_SEC, "password": -self.RETRY_SEC}
         reported_challenge = None
-        for second in range(self.manual_wait_ms // 1000):
+        start = time.monotonic()
+        while (second := int(time.monotonic() - start)) < self.manual_wait_ms // 1000:
             if self.is_verification_page():
                 if reported_challenge != self.page.url.split("?")[0]:
                     reported_challenge = self.page.url.split("?")[0]
@@ -65,7 +77,7 @@ class LoginPage(BasePage):
                     self._sign_in_step(second, last_action)
             else:
                 break
-            self.page.wait_for_timeout(1000)
+            self._wait_for_screen_change()
         if self.is_signin_page() or self.is_verification_page():
             self.take_screenshot("signin_not_completed")
             raise SignInRequiredError(
@@ -74,6 +86,14 @@ class LoginPage(BasePage):
                 f"{self.manual_wait_ms // 1000}s (EBAY_LOGIN_WAIT_SEC).")
         self._save_auth_state()
         self.logger.info(f"Sign-in completed | url={self.page.url}")
+
+    # Wait until the URL changes (max 2s)
+    def _wait_for_screen_change(self) -> None:
+        current = self.page.url
+        try:
+            self.page.wait_for_url(lambda url: url != current, timeout=self.SCREEN_CHANGE_MS)
+        except PlaywrightTimeout:
+            pass
 
     # One sign-in action per screen
     def _sign_in_step(self, second: int, last_action: dict) -> None:

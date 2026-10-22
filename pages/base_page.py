@@ -1,6 +1,6 @@
 import logging
 import re
-import time
+from typing import Optional
 from urllib.parse import urlparse
 
 import allure
@@ -32,6 +32,12 @@ class BasePage:
     )
 
     BROWSER_CHECK_MARKER = "checking your browser before you access ebay"  # not a block - redirects by itself
+    NAVIGATION_MS = 45_000       # page loads on a slow / filtered network
+    QUICK_MS = 5_000             # UI reactions: popup, listbox, chosen value
+    TEXT_CHECK_MS = 3_000        # block / check pages are tiny and return text at once
+    BLOCK_BACKOFF_MS = 20_000
+
+    BROWSER_CHECK_TEXT = re.compile(r"Checking your browser before you access eBay", re.IGNORECASE)
     BROWSER_CHECK_WAIT_SEC = 180
 
     SHIP_TO_TEXT = re.compile(r"Are you shipping to", re.IGNORECASE)  # injected dynamically - not reachable by XPath
@@ -53,7 +59,7 @@ class BasePage:
             return False
         self.logger.info("Ship-to location popup shown - confirming")
         try:
-            self.page.get_by_role("button", name="Confirm", exact=True).first.click(timeout=5000)
+            self.page.get_by_role("button", name="Confirm", exact=True).first.click(timeout=self.QUICK_MS)
             self.page.wait_for_load_state("domcontentloaded")
         except PlaywrightError as e:
             self.logger.warning(f"Could not confirm ship-to popup: {str(e).splitlines()[0]}")
@@ -61,8 +67,8 @@ class BasePage:
 
     # Open URL, detect block pages
     @allure.step("ניווט לכתובת: {url}")
-    def navigate(self, url: str, retries: int = 1, retry_wait_ms: int = 20_000,
-                 wait_until: str = "domcontentloaded", timeout: int = 30_000) -> None:
+    def navigate(self, url: str, retries: int = 1, retry_wait_ms: int = BLOCK_BACKOFF_MS,
+                 wait_until: str = "domcontentloaded", timeout: int = NAVIGATION_MS) -> None:
         self.logger.info(f"Navigating to URL: {url}")
         for attempt in range(retries + 1):
             self._goto(url, wait_until, timeout)
@@ -72,7 +78,7 @@ class BasePage:
             self.logger.warning(f"Block page detected (attempt {attempt + 1})")
             self.take_screenshot(f"blocked_attempt_{attempt + 1}")
             if attempt < retries:
-                self.page.wait_for_timeout(retry_wait_ms)
+                self.page.wait_for_timeout(retry_wait_ms)  # deliberate backoff after a block, not a load wait
         raise SiteBlockedError(
             f"eBay returned a block/error page for {url}. "
             "Wait a few hours / change network, or run again later."
@@ -91,30 +97,27 @@ class BasePage:
                 if "net::" not in str(e) or attempt == network_retries:
                     raise
                 self.logger.warning(f"Navigation interrupted ({str(e).splitlines()[0]}), retrying")
-                self.page.wait_for_timeout(3000 * (attempt + 1))
+                self.page.wait_for_timeout(3000 * (attempt + 1))  # deliberate backoff before retry
 
     # Wait out eBay's browser check
     def _wait_for_browser_check(self) -> None:
         if not self._on_browser_check():
             return
         self.logger.warning("eBay browser check page shown - waiting for it to pass")
-        deadline = time.monotonic() + self.BROWSER_CHECK_WAIT_SEC
-        while time.monotonic() < deadline:
-            self.page.wait_for_timeout(1000)
-            if not self._on_browser_check():
-                try:
-                    self.page.wait_for_load_state("domcontentloaded")
-                except PlaywrightError:
-                    pass
-                return
-        self.take_screenshot("browser_check_stuck")
-        raise SiteBlockedError("eBay browser check did not pass. Too many requests in a short "
-                               "time - wait 15-30 minutes and run again.")
+        try:
+            # until the check text is gone (survives the redirect)
+            self.page.get_by_text(self.BROWSER_CHECK_TEXT).first.wait_for(
+                state="hidden", timeout=self.BROWSER_CHECK_WAIT_SEC * 1000)
+            self.page.wait_for_load_state("domcontentloaded")
+        except PlaywrightTimeout:
+            self.take_screenshot("browser_check_stuck")
+            raise SiteBlockedError("eBay browser check did not pass. Too many requests in a short "
+                                   "time - wait 15-30 minutes and run again.") from None
 
     # Is the browser check shown?
     def _on_browser_check(self) -> bool:
         try:
-            return self.BROWSER_CHECK_MARKER in self.page.inner_text("body", timeout=10000).lower()
+            return self.BROWSER_CHECK_MARKER in self.page.inner_text("body", timeout=self.TEXT_CHECK_MS).lower()
         except PlaywrightTimeout:
             return False
         except PlaywrightError:
@@ -123,7 +126,7 @@ class BasePage:
     # Is a block page shown?
     def is_blocked(self) -> bool:
         try:
-            text = self.page.inner_text("body", timeout=10000).lower()
+            text = self.page.inner_text("body", timeout=self.TEXT_CHECK_MS).lower()
         except PlaywrightError:
             return False
         return any(marker in text for marker in self.BLOCK_MARKERS)
@@ -145,13 +148,13 @@ class BasePage:
         return "/fpa/upgrade" in self.page.url or self._host().startswith("signup.")
 
     # Wait until element is visible
-    def wait_for_element_visible(self, selector: str, timeout: int = None) -> Locator:
+    def wait_for_element_visible(self, selector: str, timeout: Optional[int] = None) -> Locator:
         locator = self.page.locator(selector).first
         locator.wait_for(state="visible", timeout=timeout)
         return locator
 
     # Visible within timeout? (no raise)
-    def is_visible_within(self, selector: str, timeout: int) -> bool:
+    def is_visible_within(self, selector: str, timeout: Optional[int] = None) -> bool:
         try:
             self.wait_for_element_visible(selector, timeout)
             return True
@@ -168,6 +171,6 @@ class BasePage:
             data = self.page.screenshot(path=str(path), full_page=True)
             allure.attach(data, name=safe_name, attachment_type=allure.attachment_type.PNG)
             self.logger.info(f"Screenshot saved: {path}")
-        except Exception as e:
+        except (PlaywrightError, OSError) as e:
             self.logger.error(f"Failed to capture screenshot {name}: {e}")
         return str(path)

@@ -5,7 +5,7 @@ from typing import Iterator
 
 import allure
 import pytest
-from playwright.sync_api import BrowserContext, Page
+from playwright.sync_api import BrowserContext, Error as PlaywrightError, Page
 
 from pages.base_page import SCREENSHOTS_DIR, BasePage
 from services.ebay_workflow_service import EBayWorkflowService
@@ -88,7 +88,7 @@ def context(context: BrowserContext, profile: Profile) -> BrowserContext:
 def _block_media_except_auth(route) -> None:
     try:
         frame_url = route.request.frame.url
-    except Exception:
+    except PlaywrightError:
         frame_url = ""
     if any(marker in url for url in (route.request.url, frame_url)
            for marker in _AUTH_MARKERS):
@@ -108,7 +108,7 @@ def _attach_failure_artifacts(request, page: Page) -> None:
         allure.attach(page.screenshot(full_page=True), name="failure_screenshot",
                       attachment_type=allure.attachment_type.PNG)
         allure.attach(page.url, name="failure_url", attachment_type=allure.attachment_type.URI_LIST)
-    except Exception:
+    except PlaywrightError:
         pass
 
 
@@ -121,16 +121,17 @@ def fresh_screenshots_dir() -> None:
 
 # Workflow service + cart cleanup
 @pytest.fixture
-def ebay(page: Page, scenario: Scenario, request,
+def ebay(page: Page, scenario: Scenario, profile: Profile, request,
          fresh_screenshots_dir) -> Iterator[EBayWorkflowService]:
-    service = EBayWorkflowService(page, currency=scenario.currency)
+    service = EBayWorkflowService(page, currency=scenario.currency,
+                                  item_pause_ms=profile.item_pause_ms)
     yield service
     _attach_failure_artifacts(request, page)  # before cleanup
     if env_flag("EBAY_KEEP_CART", False) or page.is_closed():
         return
     try:
         service.clear_cart()
-    except Exception as e:
+    except Exception as e:  # cleanup must never fail a test
         logging.getLogger("teardown").warning(f"Cart cleanup failed: {e}")
 
 

@@ -1,6 +1,7 @@
 import json
 import logging
 import random
+from decimal import Decimal
 from typing import List, Optional, Sequence
 
 import allure
@@ -19,9 +20,10 @@ logger = logging.getLogger("EBayWorkflowService")
 
 class EBayWorkflowService:
     # Pages used by the flow
-    def __init__(self, page: Page, currency: str = "USD"):
+    def __init__(self, page: Page, currency: str = "USD", item_pause_ms: int = 0):
         self.page = page
         self.currency = currency
+        self.item_pause_ms = item_pause_ms
         self.search_page = SearchResultsPage(page)
         self.cart_page = CartPage(page)
         self.search_report: List[dict] = []
@@ -62,7 +64,7 @@ class EBayWorkflowService:
 
     # 2. Search under price, with paging
     @allure.step("חיפוש '{query}' עד {max_price} (עד {limit} פריטים)")
-    def search_items_by_name_under_price(self, query: str, max_price: float, limit: int = 5,
+    def search_items_by_name_under_price(self, query: str, max_price: Decimal, limit: int = 5,
                                          max_pages: int = 5) -> List[str]:
         self.search_report = []
         self.search_page.search(query, max_price)
@@ -90,8 +92,9 @@ class EBayWorkflowService:
                 break
             if index > target:
                 logger.info(f"Replacing a failed item with spare candidate: {url}")
-            if index > 1:
-                self.page.wait_for_timeout(random.randint(2000, 5000))  # human pace vs bot detection
+            if index > 1 and self.item_pause_ms:
+                # deliberate throttle vs bot detection (profile item_pause_ms), not a load wait
+                self.page.wait_for_timeout(random.randint(self.item_pause_ms // 2, self.item_pause_ms))
             item_tab = self.page.context.new_page()
             try:
                 label = f"item_{index}" if index <= target else f"spare_{index - target}"
@@ -110,5 +113,5 @@ class EBayWorkflowService:
 
     # 4. Assert cart total within budget
     @allure.step("אימות סכום הסל")
-    def assert_cart_total_not_exceeds(self, budget_per_item: float, items_count: int) -> None:
+    def assert_cart_total_not_exceeds(self, budget_per_item: Decimal, items_count: int) -> None:
         self.cart_page.assert_total_not_exceeds(budget_per_item, items_count, self.currency)
